@@ -1,5 +1,13 @@
 Revision history for File::Cache
 
+0.14 2000-11-27-09-45
+  - prepared version 0.14 for release
+  - documented the optional usage of Storable in the README
+  - added requirement for File::Spec 0.82
+  - removed "use Data::Dumper"
+  - the .description file now uses a global friendly umask
+  - started version 0.14
+  
 0.13 2000-10-07-19-22
   - binmode is now used to avoid problems with setting/getting binary data
     from the cache (This change probably means that the segfault

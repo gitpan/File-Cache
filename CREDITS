@@ -29,3 +29,11 @@
   on the File::Path, which led to some major changes to the entire
   library finally passing taint checking.  Also, he suggested the
   temp->rename change to _WRITE_FILE. (Thanks Randal!)
+
+- Michael Blakeley (mike@blakeley.com) caught the bug with
+  .description files not being readable when the umask is restrictive and 
+  offered a patch.  (Thanks Mike!)
+
+- Neil Conway (nconway@klamath.dyndns.org) suggested documenting the 
+  optional dependency on Storable, adding a dependency for File::Spec
+  0.82, and removing the "use Data::Dumper" line.  (Thanks Neil!)

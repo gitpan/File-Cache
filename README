@@ -21,15 +21,17 @@ NAME
 
 DESCRIPTION
  
-  File::Cache implements an object store where data is persisted across 
-  processes in the filesystem.  It was written to compliment IPC::Cache.
-  Where IPC::Cache is faster for small numbers of simple objects, 
+  File::Cache implements an object store where data is persisted
+  across processes in the filesystem.  It was written to compliment 
+  IPC::Cache.
+
+  Where IPC::Cache is faster for small numbers of simple objects,
   File::Cache tends towards being more performant when caching large
   numbers of complex objects.
 
 REQUIREMENTS
 
-  Storable
+  Storable (optional, if you have Data::Dumper)
   Digest::MD5.
 
 INSTALLATION

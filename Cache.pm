@@ -4,7 +4,6 @@ package File::Cache;
 
 use strict;
 use Carp;
-use Data::Dumper;
 use Digest::MD5 qw(md5_hex);
 use File::Path;
 use File::Find;
@@ -16,7 +15,7 @@ use vars qw(@ISA @EXPORT_OK $VERSION $sSUCCESS $sFAILURE $sTRUE $sFALSE
 	    $sEXPIRES_NOW $sEXPIRES_NEVER $sNO_MAX_SIZE $sGET_STALE_ONLY
 	    $sGET_FRESH_ONLY $CACHE_OBJECT_VERSION);
 
-$VERSION = '0.13';
+$VERSION = '0.14';
 
 # Describes the caches created by this version of File::Cache.  (Should
 # be incremented any time the cache file format changes in a way that
@@ -107,9 +106,15 @@ my $sDEFAULT_CACHE_DEPTH = 0;
 my $sDEFAULT_PERSISTENCE_MECHANISM = 'Storable';
 
 
+
 # cache description filename
 
 my $sCACHE_DESCRIPTION_FILENAME = '.description';
+
+
+# Always use a global friendly umask for the .description files
+
+my $sCACHE_DESCRIPTION_UMASK = 022;
 
 
 # valid filepath characters for tainting. Be sure to accept DOS/Windows style
@@ -351,9 +356,15 @@ sub _WRITE_CACHE_DESCRIPTION
 
     _CREATE_DIRECTORY($cache_key,0);
 
+    # mike@blakeley.com: specifying the filemode is bad for .description,
+    # since it's global for the whole cache.
+
     _WRITE_FILE($cache_description_path, 
 		\$serialized_cache_description, 
-		$filemode);
+		$filemode,
+	        $sCACHE_DESCRIPTION_UMASK);
+
+    
 }
 
 
@@ -1526,7 +1537,7 @@ sub _READ_FILE
 
 sub _WRITE_FILE
 {
-    my ($filename, $data_ref, $mode) = @_;
+    my ($filename, $data_ref, $mode, $new_umask) = @_;
 
     defined($filename) or
 	croak("filename required");
@@ -1540,6 +1551,12 @@ sub _WRITE_FILE
     # Prepare the name for taint checking
 
     $filename = _UNTAINT_FILE_PATH($filename);
+
+    # Change the umask if necessary
+
+    my $old_umask = umask if $new_umask;
+
+    umask($new_umask) if $new_umask;
 
     # Create a temp filename 
 
@@ -1560,6 +1577,8 @@ sub _WRITE_FILE
 
     rename ($temp_filename, $filename) or
       croak("Couldn't rename $temp_filename to $filename");
+
+    umask($old_umask) if $old_umask;
 
     return $sSUCCESS;
 }
