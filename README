@@ -47,6 +47,10 @@ SEE ALSO
 
   IPC::Cache
 
+NOTES AND CAVEATS
+
+  Version 0.13 breaks old caches.  You will want to remove them when
+  upgrading.
 
   
 

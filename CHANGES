@@ -1,8 +1,89 @@
 Revision history for File::Cache
 
+0.13 2000-10-07-19-22
+  - binmode is now used to avoid problems with setting/getting binary data
+    from the cache (This change probably means that the segfault
+    above is no longer a problem. However, it's still a good idea to use a
+    canonical format in case processes on different platforms are accessing
+    the same cache over NFS.)
+  - Removed unreferenced subroutine _purge_all
+  - Minor formatting changes
+  - Internal subroutines get_user_path() and get_namespace_path(), are
+    now prefixed by an underscore
+  - Names of non-method subroutines are now all consistently uppercase
+  - File::Cache::REDUCE_SIZE was coded as a method, but documented as
+    an object-independent function. Fixed it, and made
+    _choose_victim_file an object-independent function
+  - Added POD documentation for get_namespace(), set_namespace(),
+    get_max_size(), set_max_size(), get_cache_depth(), and
+    set_cache_depth()
+  - "cache entry" changed to "cache object" for consistency in
+    terminology
+  - Cache size reduction is now done, if necessary, when
+    set_max_size() called 
+  - Minor portability improvements
+  - Improved error checking for REDUCE_SIZE
+  - Added parameter checking to subroutines
+  - Removed $sGET_STALE_ONLY and $sGET_FRESH_ONLY from @EXPORT_OK list
+    (these are internal constants)
+  - Internal subroutines get_username_path() and get_namespace_path()
+    now build the path directly from the cache key, username, and
+    namespace parameters. Internal subroutines set_username_path() and
+    set_namespace_path() removed.
+  - Improved directory verification so that it only happens when the
+    cache key, user, or namespace change.
+  - Modified some functions to return references instead of operating
+    on reference parameters
+  - Added cache metadata support (useful for checking that an existing
+    cache is compatible with the current version of File::Cache)
+  - Added $CACHE_OBJECT_VERSION, which describes the version of cache
+    objects that the current version of File::Cache can work with.
+  - Added support for choosing the persistence mechanism to be either
+    Storable (the traditional and default mechanism) or Data::Dumper.
+    (Data::Dumper is slower, but (1) is a standard Perl module, (2) is
+    written entirely in Perl (no compilation difficulties), and (3)
+    generates human-readable cache entries.)
+  - minor formatting change to better fit 80 columns
+  - changed _UNTAINT_STRING to take a untainted regex
+  - added _UNTAINT_FILE_PATH to call _UNTAINT_STRING with the file path regex
+  - Changed default cache key from $TMPDIR/File::Cache to $TMPDIR/FileCache on
+    DOS/Windows platforms, since the former is illegal.
+  - retroactively split version 0.13 from 0.12
+  - Corrupted cache objects stored using Data::Dumper are automatically
+    detected and removed from the cache
+  - Cache_Description.pl was changed to .description 
+  - .description files now use a proprietary format instead of Data::Dumper
+  - changed test.pl to always quote the call to the subprocess
+  - changed test/test_get.pl to strip quotes if needed
+  - wrote _RECURSIVELY_REMOVE_DIRECTORY to avoid taint failures in File::Path
+  - switched to finddepth() instead of find() in File::Find because finddepth()
+    doesn't use Cwd, which in turn is not taint safe.
+  - removed the unused _UNTAINT_CACHE_DESCRIPTION_CODE() and
+    $sUNTAINTED_CACHE_DESCRIPTION_CODE_REGEX
+  - updated the README to mention the cache upgrade issues
+  - updated the CREDITS file
+  - changed _WRITE_FILE to write to a temp file then rename to
+    avoid corruption race (thanks Randal!)
+  - better documentation for get, get_stale, and set (thanks Randal!)
+  - added two tests for getting and setting blessed objects
+  
+
+0.12 2000-08-25-09-58 (not public)
+  - fixed a typo in CHANGES
+  - added a more generic taint check called _untaint_string, this
+    is called everywhere tainting could occur
+  - use File::Spec::Functions::tmpdir to remove OS dependency for temp
+    directory (Bug ID 104869)
+  - removed last TODO item
+  - cache directories are now only created when needed (David Coppit
+    <david@coppit.org>)
+  - fixed the second test "21" in test.pl
+  - switched to nfreeze() instead of freeze to avoid segfault (thanks
+    David!)
+
 0.11 2000-06-22-09-23
   - updated the CREDITS file
-  - updated Cache.pm for version 0.10
+  - updated Cache.pm for version 0.11
 
 0.10 2000-06-22-09-07
   - updated Cache.pm for version 0.10
