@@ -1,5 +1,13 @@
 Revision history for File::Cache
 
+0.08 2000-04-12-10-31
+  - added get_creation_time() (David Coppit <david@coppit.org>)
+  - added get_expiration_time() (David Coppit <david@coppit.org>)
+  - updated the perldoc (David Coppit <david@coppit.org>)
+  - updated the test.pl script to include tests for get_creation_time() and
+    get_expiration_time() (David Coppit <david@coppit.org>)
+
+
 0.07 2000-04-10-09-45
   - added support for the "cache_depth" option that enables subdirectories in the cache
     to increase performance when caching large numbers of objects

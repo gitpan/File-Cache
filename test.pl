@@ -8,7 +8,7 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN { $| = 1; print "1..18\n"; }
+BEGIN { $| = 1; print "1..20\n"; }
 END {print "not ok 1\n" unless $loaded;}
 
 use File::Cache;
@@ -253,11 +253,63 @@ if ($status) {
    print "not ok $test\n";
 }
 
+# Test getting the creation time of the cache entry
+
+$test = 17;
+
+my $timed_key = 'timed key';
+
+my $creation_time = time();
+
+my $expires_in = 1000;
+
+$cache1->set($timed_key, $seed_value, $expires_in);
+
+# Delay a bit
+
+sleep(2);
+    
+# Let's expect no more than 1 second delay between the creation of the cache
+# entry and our saving of the time.
+
+my $cached_creation_time = $cache1->get_creation_time($timed_key);
+
+my $creation_time_delta = $creation_time - $cached_creation_time;
+
+if ($creation_time_delta <= 1) {
+    $status = 1;
+} else {
+    $status = 0;
+}
+
+if ($status) {
+    print "ok $test\n";
+} else {                                                                        
+   print "not ok $test\n";
+}   
+
+
+# Test getting the expiration time of the cache entry
+
+$test = 18;
+
+my $expected_expiration_time = $cache1->get_creation_time($timed_key) + $expires_in;
+
+my $actual_expiration_time = $cache1->get_expiration_time($timed_key);
+
+$status = $expected_expiration_time == $actual_expiration_time;
+
+if ($status) {
+    print "ok $test\n";
+} else {
+   print "not ok $test\n";
+}
+
 
 
 # Test PURGING of a cache object
 
-$test = 17;
+$test = 19;
 
 $status = File::Cache::PURGE($sTEST_CACHE_KEY);
 
@@ -270,7 +322,7 @@ if ($status) {
 
 # Test CLEARING of a cache object
 
-$test = 18;
+$test = 20;
 
 $status = File::Cache::CLEAR($sTEST_CACHE_KEY);
 

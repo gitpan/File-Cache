@@ -12,7 +12,7 @@ use File::Spec;
 use vars qw($VERSION);
 
 
-$VERSION = '0.07';
+$VERSION = '0.08';
 
 # Constants
 
@@ -163,12 +163,9 @@ sub set
 {
     my ($self, $identifier, $object, $expires_in) = @_;
 
-    $identifier or
-	croak("identifier required");
+    my $unique_key = _build_unique_key($identifier);
 
-    $identifier = md5_hex($identifier);
-
-    my $cached_file_path = $self->_build_cached_file_path($identifier);
+    my $cached_file_path = $self->_build_cached_file_path($unique_key);
 
     # expiration time is based on a delta from the current time
     # if expires_in is defined, the object will expire in that number of seconds from now
@@ -178,18 +175,20 @@ sub set
 
     my $expires_at;
 
+    my $created_at = time();
+
     if (defined $expires_in) {
-	$expires_at = time() + $expires_in;
+	$expires_at = $created_at + $expires_in;
     } elsif ($global_expires_in ne $sEXPIRES_NEVER) {
-	$expires_at = time() + $global_expires_in;
+	$expires_at = $created_at + $global_expires_in;
     } else {
 	$expires_at = $sEXPIRES_NEVER;
     }
-
+    
 
     # add the new object to the cache in this instance's namespace
 
-    my %object_data = ( object => $object, expires_at => $expires_at );
+    my %object_data = ( object => $object, expires_at => $expires_at, created_at => $created_at );
     
     my $frozen_object_data = freeze(\%object_data);
 
@@ -248,12 +247,9 @@ sub _get
 {
     my ($self, $identifier, $freshness) = @_;
 
-    $identifier or
-	croak("identifier required");
+    my $unique_key = _build_unique_key($identifier);
 
-    $identifier = md5_hex($identifier);
-
-    my $cached_file_path = $self->_build_cached_file_path($identifier);
+    my $cached_file_path = $self->_build_cached_file_path($unique_key);
 
     # check the cache for the specified object
 
@@ -303,6 +299,21 @@ sub _get
     return $cloned_object;
 }
 
+
+# take an human readable identifier, and create a unique get from it
+ 
+sub _build_unique_key
+{
+    my ($identifier) = @_;
+
+    $identifier or
+	croak("identifier required");
+
+    my $unique_key = md5_hex($identifier) or
+	croak("couldn't build unique key for identifier $identifier");
+
+    return $unique_key;
+}
 
 
 # check to see if a directory exists, and create it with option mask if it doesn't
@@ -718,13 +729,13 @@ sub size
 
 sub _build_cached_file_path 
 {
-    my ($self, $identifier) = @_;
+    my ($self, $unique_key) = @_;
 
     my $namespace_path = $self->get_namespace_path();
 
     my $cache_depth = $self->get_cache_depth();
 
-    my (@path_prefix) = _extract_path_prefix($identifier, $cache_depth);
+    my (@path_prefix) = _extract_path_prefix($unique_key, $cache_depth);
 
     my $cached_file_path = _build_path($namespace_path);
 
@@ -736,7 +747,7 @@ sub _build_cached_file_path
 
     }
 
-    $cached_file_path = _build_path($cached_file_path, $identifier);
+    $cached_file_path = _build_path($cached_file_path, $unique_key);
 
     return $cached_file_path;
 }
@@ -746,12 +757,12 @@ sub _build_cached_file_path
 
 sub _extract_path_prefix  
 {
-    my ($identifier, $cache_depth) = @_;
+    my ($unique_key, $cache_depth) = @_;
 
     my @path_prefix;
 
     for (my $i = 0; $i < $cache_depth; $i++) {
-	push (@path_prefix, substr($identifier, $i, 1));
+	push (@path_prefix, substr($unique_key, $i, 1));
     }
 
     return @path_prefix;
@@ -1086,6 +1097,65 @@ sub set_global_expires_in
 
     $self->{_global_expires_in} = $global_expires_in;
 }
+
+
+
+# Get the creation time for a cache entry. Returns undef if the value is not in
+# the cache
+
+sub get_creation_time
+{
+    my ($self, $identifier) = @_;
+
+    my $unique_key = _build_unique_key($identifier);
+    
+    my $cached_file_path = $self->_build_cached_file_path($unique_key);
+    
+    my %object_data;
+    
+    _read_object_data($cached_file_path, \%object_data);
+
+    if (%object_data) {
+
+	return $object_data{created_at};
+	
+    } else {
+	
+        return undef;
+	
+    }
+}
+
+
+# Get the expiration time for a cache entry. Returns undef if the value is not
+# in the cache
+
+sub get_expiration_time
+{
+    my ($self, $identifier) = @_;
+
+    my $unique_key = _build_unique_key($identifier);
+    
+    my $cached_file_path = $self->_build_cached_file_path($unique_key);
+    
+    my %object_data;
+    
+    _read_object_data($cached_file_path, \%object_data);
+    
+    if (%object_data) {
+	
+	return $object_data{expires_at};
+	
+    } else {
+	
+        return undef;
+	
+    }
+}
+
+
+
+
 
 
 # Get the username associated with this cache
@@ -1455,6 +1525,33 @@ parameter:
 The new target cache size.
 
 =back
+
+=item B<get_creation_time($identifier)>
+
+Gets the time at which the data associated with $identifier was stored in the
+cache. Returns undef if $identifier is not cached.
+
+=over 4
+
+=item $identifier
+
+The key referring to the object to be retrieved.
+
+=back 
+
+
+=item B<get_expiration_time($identifier)>
+
+Gets the time at which the data associated with $identifier will expire from
+the cache. Returns undef if $identifier is not cached.
+
+=over 4
+
+=item $identifier
+
+The key referring to the object to be retrieved.
+
+=back 
 
 
 =item B<get_global_expires_in()>
