@@ -26,8 +26,8 @@ Revision history for File::Cache
   - modified test.pl to use "/tmp/TMPC" as a namespace
   - updated the requirements in Makefile.PL
   - updated the requirements in the README
- 
-
-
+  - provided a default username if getpwuid is not available (MacOS)
+  - fixed a problem where _purge failed on FreeBSD (thanks to
+    Doug Steinwand)
 
 

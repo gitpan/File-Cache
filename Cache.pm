@@ -11,7 +11,7 @@ use File::Find;
 use vars qw($VERSION);
 
 
-$VERSION = '0.04';
+$VERSION = '0.05';
 
 my $sEXPIRES_NOW = 0;
 my $sEXPIRES_NEVER = -1;
@@ -67,11 +67,9 @@ sub new
 
     # create a path for this particular user, and verify that it exists
 
-    my $effective_uid = $>;
+    my $username = _get_username();
 
-    my $name  = getpwuid($effective_uid);
-
-    my $cache_path = _build_path($cache_key, $name);
+    my $cache_path = _build_path($cache_key, $username);
 
     _verify_directory($cache_path) or
 	croak("Couldn't verify directory $cache_path");
@@ -218,7 +216,7 @@ sub _read_object_data
 
     my $frozen_object_data = undef;
 
-    if (-e $file_path) {
+    if (-f $file_path) {
 	_read_file($file_path, \$frozen_object_data);
     } else {
 	return;
@@ -279,7 +277,11 @@ sub _purge_file_wrapper
 {
     my $file_path = $File::Find::name;
 
-    _purge_file($file_path);
+    if (-f $file_path) {
+	_purge_file($file_path);
+    } else {
+	return;
+    }
 }
 
 
@@ -506,6 +508,22 @@ sub _recursive_directory_size
     closedir(DIR);
     
     return $size;
+}
+
+
+sub _get_username 
+{
+    my $effective_uid = $>;
+
+    my $username; 
+
+    my $success = eval {
+	$username = getpwuid($effective_uid);
+    };
+    
+    $username = 'nobody' if !$success;
+
+    return $username;
 }
 
 

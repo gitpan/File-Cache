@@ -1,0 +1,12 @@
+
+- Larry Moore <ljmoore@freespace.net>, a cpan tester, noticed that version 0.04 
+  failed to compile on MacOS (thanks Larry!)
+
+- Frey Kuo <frey@engineer.com> pointed out that the example in the README was
+  rather buggy.  (thanks Frey!)
+
+- Doug Steinwand <dsteinwand@etoys.com> found that on FreeBSD, the _purge routine
+  failed due to an issue with File::Find and even provided a fix.  (thanks Doug!)
+
+
+
