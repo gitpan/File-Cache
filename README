@@ -26,7 +26,7 @@ DESCRIPTION
   IPC::Cache.
 
   Where IPC::Cache is faster for small numbers of simple objects,
-  File::Cache tends towards being more performant when caching large
+  File::Cache tends toward being more performant when caching large
   numbers of complex objects.
 
 REQUIREMENTS
@@ -50,6 +50,16 @@ SEE ALSO
   IPC::Cache
 
 NOTES AND CAVEATS
+
+  Use of File::Cache is now discouraged in favor of the new
+  Cache::Cache project, also available on CPAN.  Cache::Cache offers
+  all of the functionality of File::Cache, as well as integrating
+  the functionality of IPC::Cache and a number of new features.  You
+  can view the Cache::Cache project page at:
+
+    http://sourceforge.net/projects/perl-cache/
+
+
 
   Version 0.13 breaks old caches.  You will want to remove them when
   upgrading.

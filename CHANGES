@@ -1,5 +1,14 @@
 Revision history for File::Cache
 
+0.15 2001-04-17-15-07
+  - prepared version 0.15 for release
+  - added a note about the release of Cache::Cache
+  - Updated documentation to indicate that $File::Cache::sNO_MAX_SIZE is the
+    default cache size. (David Coppit <david@coppit.org>)
+  - added a patch by Michael Blakely to allow for $sEXPIRES_NEVER to 
+    be used as the $expires_in parameter on a set
+  - started version 0.15
+
 0.14 2000-11-27-09-45
   - prepared version 0.14 for release
   - documented the optional usage of Storable in the README

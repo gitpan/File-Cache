@@ -32,7 +32,8 @@
 
 - Michael Blakeley (mike@blakeley.com) caught the bug with
   .description files not being readable when the umask is restrictive and 
-  offered a patch.  (Thanks Mike!)
+  offered a patch.  He also offered a patch to allow $sEXPIRES_NEVER to 
+  be passed as the $expires_in parameter to set. (Thanks Mike!)
 
 - Neil Conway (nconway@klamath.dyndns.org) suggested documenting the 
   optional dependency on Storable, adding a dependency for File::Spec

@@ -15,7 +15,7 @@ use vars qw(@ISA @EXPORT_OK $VERSION $sSUCCESS $sFAILURE $sTRUE $sFALSE
 	    $sEXPIRES_NOW $sEXPIRES_NEVER $sNO_MAX_SIZE $sGET_STALE_ONLY
 	    $sGET_FRESH_ONLY $CACHE_OBJECT_VERSION);
 
-$VERSION = '0.14';
+$VERSION = '0.15';
 
 # Describes the caches created by this version of File::Cache.  (Should
 # be incremented any time the cache file format changes in a way that
@@ -267,19 +267,19 @@ sub _READ_CACHE_DESCRIPTION
 
     if (-f $cache_description_path) {
 
-      my $serialized_cache_description_ref = 
+      my $serialized_cache_description_ref =
 	_READ_FILE($cache_description_path);
-      
+
       unless (defined $serialized_cache_description_ref and
-	      defined $$serialized_cache_description_ref) 
+	      defined $$serialized_cache_description_ref)
       {
-      
+
         warn "Could not read cache description file $cache_description_path";
         return undef;
-      
+
       }
 
-      _UNSERIALIZE_HASH($$serialized_cache_description_ref, 
+      _UNSERIALIZE_HASH($$serialized_cache_description_ref,
 			$cache_description);
 
     } elsif (_SUBDIRECTORIES_PRESENT($cache_key) eq $sTRUE) {
@@ -359,12 +359,12 @@ sub _WRITE_CACHE_DESCRIPTION
     # mike@blakeley.com: specifying the filemode is bad for .description,
     # since it's global for the whole cache.
 
-    _WRITE_FILE($cache_description_path, 
-		\$serialized_cache_description, 
+    _WRITE_FILE($cache_description_path,
+		\$serialized_cache_description,
 		$filemode,
 	        $sCACHE_DESCRIPTION_UMASK);
 
-    
+
 }
 
 
@@ -375,7 +375,7 @@ sub _SERIALIZE_HASH
   my $serialized_hash;
 
   foreach my $key (keys %{$hash_ref}) {
-    
+
     $serialized_hash .= "$key => $hash_ref->{$key}\n";
 
   }
@@ -384,7 +384,7 @@ sub _SERIALIZE_HASH
 }
 
 
-sub _UNSERIALIZE_HASH 
+sub _UNSERIALIZE_HASH
 {
   my ($string, $hash_ref) = @_;
 
@@ -490,7 +490,8 @@ sub set
     my $created_at = time();
 
     if (defined $expires_in) {
-	$expires_at = $created_at + $expires_in;
+	$expires_at = ($expires_in eq $sEXPIRES_NEVER) ?
+          $expires_in : ($created_at + $expires_in);
     } elsif ($global_expires_in ne $sEXPIRES_NEVER) {
 	$expires_at = $created_at + $global_expires_in;
     } else {
@@ -647,7 +648,7 @@ sub _CLONE
     }
     else
     {
-	if (ref $data_reference)
+      if (ref $data_reference)
       {
         my $data = $$data_reference;
 	  $cloned_data = \$data;
@@ -764,7 +765,7 @@ sub _get
 	    if (_S_SHOULD_EXPIRE($expires_at)) {
 		
 		# fetch the object and return a copy
-		$cloned_object = 
+		$cloned_object =
               _CLONE( $object, $self->get_persistence_mechanism() );
 
 	    }
@@ -1558,10 +1559,10 @@ sub _WRITE_FILE
 
     umask($new_umask) if $new_umask;
 
-    # Create a temp filename 
+    # Create a temp filename
 
     my $temp_filename = "$filename.tmp$$";
-    
+
     open(FILE, ">$temp_filename") or
 	croak("Couldn't open $temp_filename for writing: $!\n");
 
@@ -1713,11 +1714,11 @@ sub _FIND_USERNAME
 
 # Untaint a path to a file
 
-sub _UNTAINT_FILE_PATH 
+sub _UNTAINT_FILE_PATH
 {
     my ($file_path) = @_;
 
-    return _UNTAINT_STRING($file_path, $sUNTAINTED_FILE_PATH_REGEX); 
+    return _UNTAINT_STRING($file_path, $sUNTAINTED_FILE_PATH_REGEX);
 }
 
 
@@ -1764,23 +1765,23 @@ sub _BUILD_DEFAULT_CACHE_KEY
 # Remove a directory starting at the root
 
 
-sub _RECURSIVELY_REMOVE_DIRECTORY 
+sub _RECURSIVELY_REMOVE_DIRECTORY
 {
   my ($root) = @_;
-  
+
   -d $root or
     croak("$root is not a directory");
-  
+
   opendir(DIR, $root) or
     croak("Couldn't open directory $root: $!");
-  
+
   my @dirents = readdir(DIR);
-  
+
   closedir(DIR) or
     croak("Couldn't close directory $root: $!");
 
   foreach my $dirent (@dirents) {
-  
+
     next if $dirent eq '.' or $dirent eq '..';
 
     my $path_to_dirent = "$root/$dirent";
@@ -1793,9 +1794,9 @@ sub _RECURSIVELY_REMOVE_DIRECTORY
       unlink($path_to_dirent) or
 	croak("Couldn't unlink($path_to_dirent): $!\n");
     }
-    
+
   }
-  
+
   rmdir($root) or
     croak("Couldn't rmdir $root: $!");
 }
@@ -2180,6 +2181,16 @@ __END__
 
 File::Cache - Share data between processes via filesystem
 
+=head1 NOTE
+
+Use of File::Cache is now discouraged in favor of the new Cache::Cache
+project, also available on CPAN.  Cache::Cache offers all of the
+functionality of File::Cache, as well as integrating the functionality
+of IPC::Cache and a number of new features.  You can view the
+Cache::Cache project page at:
+
+  http://sourceforge.net/projects/perl-cache/
+
 =head1 DESCRIPTION
 
 B<File::Cache> is a perl module that implements an object storage
@@ -2377,7 +2388,9 @@ documentation for the specification syntax.
 objects are removed during the set() operation in order to reduce the
 cache size before the new cache value is added. See the reduce_size()
 documentation for the cache object removal policy. The max_size will be
-maintained regardless of the value of auto_remove_stale.
+maintained regardless of the value of auto_remove_stale. The default is
+$File::Cache::sNO_MAX_SIZE, which indicates that the cache has no
+maximum size.
 
 =item $options(auto_remove_stale}
 
@@ -2609,8 +2622,8 @@ used to isolate sections of a cache.
 
 =item B<get_max_size()>
 
-Returns the current cache maximum size. $File::Cache::sNO_MAX_SIZE
-indicates no maximum size.
+Returns the current cache maximum size. $File::Cache::sNO_MAX_SIZE (the
+default) indicates no maximum size.
 
 
 =item B<set_max_size($max_size)>
