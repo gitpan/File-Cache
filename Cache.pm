@@ -9,27 +9,34 @@ use Digest::MD5  qw(md5_hex);
 use File::Path;
 use File::Find;
 use File::Spec;
-use vars qw($VERSION);
+use Exporter;
 
+use vars qw(@ISA @EXPORT_OK $VERSION $sSUCCESS $sFAILURE $sTRUE $sFALSE 
+	    $sEXPIRES_NOW $sEXPIRES_NEVER $sNO_MAX_SIZE $sGET_STALE_ONLY 
+	    $sGET_FRESH_ONLY);
 
-$VERSION = '0.08';
+$VERSION = '0.09';
+
+@ISA = qw(Exporter);
+
+@EXPORT_OK = qw($sSUCCESS $sFAILURE $sTRUE $sFALSE $sEXPIRES_NOW $sEXPIRES_NEVER
+		$sNO_MAX_SIZE $sGET_STALE_ONLY $sGET_FRESH_ONLY);
 
 # Constants
 
-my $sSUCCESS = 1;
-my $sFAILURE = 0;
+$sSUCCESS = 1;
+$sFAILURE = 0;
 
-my $sTRUE = 1;
-my $sFALSE = 0;
+$sTRUE = 1;
+$sFALSE = 0;
 
-my $sEXPIRES_NOW = 0;
-my $sEXPIRES_NEVER = -1;
+$sEXPIRES_NOW = 0;
+$sEXPIRES_NEVER = -1;
 
-my $sNO_MAX_SIZE = -1;
+$sNO_MAX_SIZE = -1;
 
-my $sGET_STALE_ONLY = 1;
-my $sGET_FRESH_ONLY = 0;
-
+$sGET_STALE_ONLY = 1;
+$sGET_FRESH_ONLY = 0;
 
 # The default cache key is used to address the temp filesystem
 
@@ -1469,7 +1476,8 @@ the default expires_in value for the cache.
 =item B<get($identifier)>
 
 Retrieves an object from the cache, if it is not stale.  If it is stale and
-auto_remove_stale is 1, it will be removed from the cache. get takes the following
+auto_remove_stale is 1, it will be removed from the cache.  B<get> returns
+undef if the object is stale or does not exist.  get takes the following
 parameter:
 
 =over 4
@@ -1483,7 +1491,8 @@ The key referring to the object to be retrieved.
 =item B<get_stale($identifier)>
 
 Retrieves a stale object from the cache. Call this method only if auto_remove_stale
-is 0. (It happens to have a precise semantics for auto_remove_stale == 1, but it may
+is 0. B<get_stale> returns undef if the object is not stale or does not exist.
+(It happens to have a precise semantics for auto_remove_stale == 1, but it may
 change.) get_stale takes the following parameter:
 
 =over 4

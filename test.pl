@@ -11,7 +11,8 @@
 BEGIN { $| = 1; print "1..20\n"; }
 END {print "not ok 1\n" unless $loaded;}
 
-use File::Cache;
+use File::Cache qw($sSUCCESS $sFAILURE);
+
 
 $loaded = 1;
 print "ok 1\n";
@@ -55,7 +56,7 @@ my $key = 'key1';
 
 my $status = $cache1->set($key, $seed_value);
 
-if ($status) {
+if ($status == $sSUCCESS) {
     print "ok $test\n";
 } else {
    print "not ok $test\n";
@@ -77,8 +78,11 @@ if ($val1_retrieved eq $seed_value) {
 
 $test = 5;
 
-if (system("perl", "-Iblib/lib", "./test/test_get.pl", 
-	   $sTEST_CACHE_KEY, $sTEST_NAMESPACE, $sTEST_USERNAME, $sTEST_CACHE_DEPTH, $key, $seed_value) == 0) {
+$status = system("perl", "-Iblib/lib", "./test/test_get.pl", 
+		 $sTEST_CACHE_KEY, $sTEST_NAMESPACE, $sTEST_USERNAME, $sTEST_CACHE_DEPTH, 
+		 $key, $seed_value);
+
+if ($status == 0) {
     print "ok $test\n";
 } else {
     print "not okay $test\n";
@@ -91,7 +95,7 @@ $test = 6;
 
 my $size = File::Cache::SIZE($sTEST_CACHE_KEY);
 
-if ($size) {
+if ($size > 0) {
    print "ok $test\n";
 } else {
     print "not okay $test\n";
@@ -104,7 +108,7 @@ $test = 7;
 
 $status = $cache1->clear();
 
-if ($status) {
+if ($status == $sSUCCESS) {
     print "ok $test\n";
 } else {
    print "not ok $test\n";
@@ -166,7 +170,7 @@ $test = 10;
 
 $status = $cache1->set($key, $seed_value, 0);
 
-if ($status) {
+if ($status == $sSUCCESS) {
     print "ok $test\n";
 } else {
    print "not ok $test\n";
@@ -206,7 +210,7 @@ $test = 13;
 
 $status = $cache1->set($key, $seed_value, 2);
 
-if ($status) {
+if ($status == $sSUCCESS) {
     print "ok $test\n";
 } else {
    print "not ok $test\n";
@@ -247,7 +251,7 @@ $test = 16;
 
 $status = $cache1->purge();
 
-if ($status) {
+if ($status == $sSUCCESS) {
     print "ok $test\n";
 } else {
    print "not ok $test\n";
@@ -313,7 +317,7 @@ $test = 19;
 
 $status = File::Cache::PURGE($sTEST_CACHE_KEY);
 
-if ($status) {
+if ($status == $sSUCCESS) {
     print "ok $test\n";
 } else {
    print "not ok $test\n";
@@ -326,7 +330,7 @@ $test = 20;
 
 $status = File::Cache::CLEAR($sTEST_CACHE_KEY);
 
-if ($status) {
+if ($status == $sSUCCESS) {
     print "ok $test\n";
 } else {
    print "not ok $test\n";

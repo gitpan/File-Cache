@@ -1,5 +1,11 @@
 Revision history for File::Cache
 
+0.09 2000-04-28-12-43
+  - perldoc updates for get and get_stale (Bug ID 104432)
+  - added public constants to EXPORT_OK (Bug ID 104433)
+  - modified test scripts to make use of EXPORT_OK'd vars
+  - updated the TODO list
+
 0.08 2000-04-12-10-31
   - added get_creation_time() (David Coppit <david@coppit.org>)
   - added get_expiration_time() (David Coppit <david@coppit.org>)
@@ -15,6 +21,7 @@ Revision history for File::Cache
     routines to actually work recursively (needed to support cache_depth)   
   - added a routine that avoids a race when removing files from the cache (thanks
     to Jessica Mintz)
+
  
 0.06 2000-03-06-11-12
   - bug fixed where purge() didn't actually delete the cache file (David Coppit
@@ -34,11 +41,13 @@ Revision history for File::Cache
   - updated the test.pl and test/test_get.pl scripts to include tests for
     setting the username, filemode, and max_size
 
+
 0.05 2000-02-22-16-23
   - updated the requirements in the README
   - provided a default username if getpwuid is not available (MacOS)
   - fixed a problem where _purge failed on FreeBSD (thanks to
     Doug Steinwand)
+
 
 0.04 2000-02-16-14-48
   - create a per-user namespace to better deal with file 
@@ -54,14 +63,17 @@ Revision history for File::Cache
   - modified test.pl to use "/tmp/TMPC" as a namespace
   - updated the requirements in Makefile.PL
 
+
 0.03 2000-02-16-02-10
   - set the default file and directory creation umask
     to 0000 as a *really* temporary fix
+
 
 0.02 2000-02-14-16-52
   - set the default file and directory creation umask
     to 0000 as a temporary fix to the file permission
     problem
+
 
 0.01 2000-02-10-09-22
   - original version, created by dclinton@eziba.com

@@ -1,5 +1,1 @@
-
-- Make the module portable with respect to directory separators. (using
-  File::Spec)
-
 - Make the module portable with respect to the use of the /tmp directory.
