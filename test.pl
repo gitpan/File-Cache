@@ -25,6 +25,7 @@ my $sTEST_CACHE_KEY = "/tmp/TSTC";
 my $sTEST_NAMESPACE = "TestCache";
 my $sMAX_SIZE = 1000;
 my $sTEST_USERNAME = "web";
+my $sTEST_CACHE_DEPTH = 3;
 
 # Test creation of a cache object
 
@@ -35,7 +36,8 @@ my $cache1 = new File::Cache( { cache_key => $sTEST_CACHE_KEY,
 			        max_size => $sMAX_SIZE,
 			        auto_remove_stale => 0,
 			        username => $sTEST_USERNAME,
-			        filemode => 0770 } );
+			        filemode => 0770,
+				cache_depth => $sTEST_CACHE_DEPTH } );
 
 if ($cache1) {
     print "ok $test\n";
@@ -76,7 +78,7 @@ if ($val1_retrieved eq $seed_value) {
 $test = 5;
 
 if (system("perl", "-Iblib/lib", "./test/test_get.pl", 
-	   $sTEST_CACHE_KEY, $sTEST_NAMESPACE, $sTEST_USERNAME, $key, $seed_value) == 0) {
+	   $sTEST_CACHE_KEY, $sTEST_NAMESPACE, $sTEST_USERNAME, $sTEST_CACHE_DEPTH, $key, $seed_value) == 0) {
     print "ok $test\n";
 } else {
     print "not okay $test\n";
@@ -107,7 +109,6 @@ if ($status) {
 } else {
    print "not ok $test\n";
 }
-
 
 
 # Test the max_size limit

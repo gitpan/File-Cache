@@ -12,7 +12,7 @@ use File::Spec;
 use vars qw($VERSION);
 
 
-$VERSION = '0.06';
+$VERSION = '0.07';
 
 # Constants
 
@@ -64,6 +64,11 @@ my $sDEFAULT_USERNAME = 'nobody';
 # by default, the objects in the cache never expire
 
 my $sDEFAULT_GLOBAL_EXPIRES_IN = $sEXPIRES_NEVER;
+
+
+# default cache depth
+
+my $sDEFAULT_CACHE_DEPTH = 0;
 
 
 # create a new Cache object that can be used to persist
@@ -126,6 +131,13 @@ sub new
     $self->set_namespace($namespace);
 
 
+    # the cache will automatically create subdirectories to this depth
+
+    my $cache_depth = defined $options->{cache_depth} ? $options->{cache_depth} : $sDEFAULT_CACHE_DEPTH;
+
+    $self->set_cache_depth($cache_depth);
+
+
     # create a path for this particular user, and verify that it exists
 
     my $user_path = _build_path($cache_key, $username);
@@ -156,9 +168,7 @@ sub set
 
     $identifier = md5_hex($identifier);
 
-    my $namespace_path = $self->get_namespace_path();
-
-    my $file_path = _build_path($namespace_path, $identifier);
+    my $cached_file_path = $self->_build_cached_file_path($identifier);
 
     # expiration time is based on a delta from the current time
     # if expires_in is defined, the object will expire in that number of seconds from now
@@ -197,7 +207,7 @@ sub set
 
     my $filemode = $self->get_filemode();
 
-    _write_file($file_path, \$frozen_object_data, $filemode);
+    _write_file($cached_file_path, \$frozen_object_data, $filemode);
 
     return $sSUCCESS;
 }
@@ -243,10 +253,7 @@ sub _get
 
     $identifier = md5_hex($identifier);
 
-    my $namespace_path = $self->get_namespace_path() or
-	croak("namespace path required");
-
-    my $file_path = _build_path($namespace_path, $identifier);
+    my $cached_file_path = $self->_build_cached_file_path($identifier);
 
     # check the cache for the specified object
 
@@ -254,7 +261,7 @@ sub _get
 
     my %object_data;
 
-    _read_object_data($file_path, \%object_data);
+    _read_object_data($cached_file_path, \%object_data);
     
     if (%object_data) {
 
@@ -272,8 +279,8 @@ sub _get
 		my $auto_remove_stale = $self->get_auto_remove_stale();
 		
 		if ($auto_remove_stale eq $sTRUE) {
-		    unlink($file_path) or
-			croak("Couldn't remove $file_path");
+		    _remove_cached_file($cached_file_path) or
+			croak("Couldn't remove cached file $cached_file_path");
 		}
 
 	    # otherwise fetch the object and return a copy
@@ -323,12 +330,12 @@ sub _verify_directory
 
 sub _read_object_data 
 {
-    my ($file_path, $data_ref) = @_;
+    my ($cached_file_path, $data_ref) = @_;
 
     my $frozen_object_data = undef;
 
-    if (-f $file_path) {
-	_read_file($file_path, \$frozen_object_data);
+    if (-f $cached_file_path) {
+	_read_file($cached_file_path, \$frozen_object_data);
     } else {
 	return;
     }
@@ -342,6 +349,26 @@ sub _read_object_data
     return;
 }
 
+
+# remove an object from the cache
+
+sub _remove_cached_file
+{
+    my ($cached_file_path) = @_;
+
+    # Is there any way to do this atomically?
+
+    if (-f $cached_file_path) {
+
+	# We don't catch the error, because this may fail if two processes are in 
+	# a race and try to remove the object
+	
+	unlink($cached_file_path);
+
+    }
+
+    return $sSUCCESS;
+}
 
 
 # clear all objects in this instance's namespace
@@ -405,8 +432,8 @@ sub _purge_file
 	my $expires_at = $object_data{expires_at};
 
 	if (_s_should_expire($expires_at)) {
-	    unlink($file) or
-		croak("Couldn't unlink $file");
+	    _remove_cached_file($file) or
+		croak("Couldn't remove cached file $file");
 	}
 	
     }
@@ -467,9 +494,13 @@ sub reduce_size
 
 	my $victim_file = $self->_choose_victim_file($namespace_path);
 
-	unlink($victim_file) or
-	    croak("Couldn't remove $victim_file");
+	if (!$victim_file) {
+	    print STDERR "Couldn't reduce size to $new_size\n";
+	    return $sFAILURE;
+	}
 
+	_remove_cached_file($victim_file) or
+	    croak("Couldn't remove cached file $victim_file");
     }
 
     return $sSUCCESS;
@@ -492,9 +523,8 @@ sub REDUCE_SIZE
 	
 	my $victim_file = $self->_choose_victim_file($cache_key);
 	
-	unlink($victim_file) or
-	    croak("Couldn't remove $victim_file");
-
+	_remove_cached_file($victim_file) or
+	    croak("Couldn't remove cached file $victim_file");
     }
 
     return $sSUCCESS;
@@ -510,15 +540,15 @@ sub _choose_victim_file
 
     # Look for the file to delete with the nearest expiration
 
-    my $nearest_expiration = _recursive_find_nearest_expiration($root);
+    my ($nearest_expiration_path, $nearest_expiration_time) = _recursive_find_nearest_expiration($root);
 
-    return $nearest_expiration if defined $nearest_expiration;
+    return $nearest_expiration_path if defined $nearest_expiration_path;
 
     # If there are no files with expirations, get the least recently accessed one
 
-    my $latest_accessed = _recursive_find_latest_accessed($root);
+    my ($latest_accessed_path, $latest_accessed_time) = _recursive_find_latest_accessed($root);
 
-    return $latest_accessed;
+    return $latest_accessed_path;
 }
 
 
@@ -530,9 +560,9 @@ sub _recursive_find_nearest_expiration
 {
     my ($directory) = @_;
 
-    my $nearest_expiration = undef;
+    my $best_nearest_expiration_path = undef;
     
-    my $nearest_expiration_time = undef;
+    my $best_nearest_expiration_time = undef;
 
     opendir(DIR, $directory) or
 	croak("Couldn't open directory $directory: $!");
@@ -543,57 +573,68 @@ sub _recursive_find_nearest_expiration
 
 	next if $dirent eq '.' or $dirent eq '..';
 
+	my $nearest_expiration_path_candidate = undef;
+
+	my $nearest_expiration_time_candidate = undef;
+
 	my $path = _build_path($directory, $dirent);
 
 	if (-d $path) {
 
-	    $nearest_expiration = _recursive_find_nearest_expiration($path);
+	    ($nearest_expiration_path_candidate, $nearest_expiration_time_candidate) = _recursive_find_nearest_expiration($path);
 
 	} else {
 
 	    my %object_data;
 
-	    # Careful not to change the access time
-	    {
-		my ($file_access_time, $file_modified_time) = (stat($path))[8,9];
-		_read_object_data($path, \%object_data);
-		utime($file_access_time, $file_modified_time, $path);
-	    }
-
-	    %object_data or
-		croak("Couldn't read cache data for file $path");
+	    _read_object_data_without_modification($path, \%object_data);
 		
 	    my $expires_at = $object_data{expires_at};
 
-	    # Skip this file if it doesn't have an expiration time.
-	    next if $expires_at == $sEXPIRES_NEVER;
+	    $nearest_expiration_path_candidate = $path;
 
-	    # Compare expiration with best one so far.
-	    if (defined $nearest_expiration) {
+	    $nearest_expiration_time_candidate = $expires_at;
 
-		# Careful! We have to be sure that already expired items get booted
-		# first! 5 > -2, so we're okay.
-		if ($nearest_expiration_time > $expires_at) {
-		    $nearest_expiration = $path;
-		    $nearest_expiration_time = $expires_at;
-		}
+	}
 
-	    # ... or just store the value if this is the first cache entry we've
-	    # encountered
+	
+	next unless defined $nearest_expiration_path_candidate;
 
-	    } else {
-		$nearest_expiration = $path;
-		$nearest_expiration_time = $expires_at;
-	    }
+	next unless defined $nearest_expiration_time_candidate;
+
+	# Skip this file if it doesn't have an expiration time.
+
+	next if $nearest_expiration_time_candidate == $sEXPIRES_NEVER;
+
+	# if this is the first candidate, they're automatically the best, otherwise they have to beat the best
+
+	if (!defined $best_nearest_expiration_time or ($best_nearest_expiration_time > $nearest_expiration_time_candidate)) {
+
+	    $best_nearest_expiration_path = $nearest_expiration_path_candidate;
+
+	    $best_nearest_expiration_time = $nearest_expiration_time_candidate;
 	}
 
     }
 
     closedir(DIR);
-    
-    return $nearest_expiration;
+
+    return ($best_nearest_expiration_path, $best_nearest_expiration_time);
 }
 
+
+# read in object data without modifying the access time
+
+sub _read_object_data_without_modification 
+{
+    my ($path, $object_data_ref) = @_;
+
+    my ($file_access_time, $file_modified_time) = (stat($path))[8,9];
+
+    _read_object_data($path, $object_data_ref);
+	
+    utime($file_access_time, $file_modified_time, $path);    
+}
 
 
 # Recursively searches a cache namespace for the cache entry with the latest
@@ -605,9 +646,9 @@ sub _recursive_find_latest_accessed
 {
     my ($directory) = @_;
 
-    my $latest_accessed = undef;
+    my $best_latest_accessed_path = undef;
 
-    my $latest_accessed_time = undef;
+    my $best_latest_accessed_time = undef;
 
     opendir(DIR, $directory) or
 	croak("Couldn't open directory $directory: $!");
@@ -618,35 +659,45 @@ sub _recursive_find_latest_accessed
 
 	next if $dirent eq '.' or $dirent eq '..';
 
+	my $latest_accessed_path_candidate = undef;
+
+	my $latest_accessed_time_candidate = undef;
+
 	my $path = _build_path($directory, $dirent);
 
 	if (-d $path) {
 
-	    $latest_accessed = _recursive_find_latest_accessed($path);
+	    ($latest_accessed_path_candidate, $latest_accessed_time_candidate) = _recursive_find_latest_accessed($path);
+
 
 	} else {
 
 	    my $last_accessed_time = (stat($path))[8];
 
-	    # Compare last accessed time with best one so far.
-	    if (defined $latest_accessed) {
-		if ($latest_accessed_time > $last_accessed_time) {
-		    $latest_accessed = $path;
-		    $latest_accessed_time = $last_accessed_time;
-		}
+	    $latest_accessed_path_candidate = $path;
 
-	    # ... or just store the value if this is the first cache entry we've
-	    # encountered
-	    } else {
-		$latest_accessed = $path;
-		$latest_accessed_time = $last_accessed_time;
-	    }
-	}	
+	    $latest_accessed_time_candidate = $last_accessed_time;
+
+	}
+
+	next unless defined $latest_accessed_path_candidate;
+
+	next unless defined $latest_accessed_time_candidate;
+
+	# if this is the first candidate, they're automatically the best, otherwise they have to beat the best
+
+	if (!defined $best_latest_accessed_time or ($best_latest_accessed_time > $latest_accessed_time_candidate)) {
+
+	    $best_latest_accessed_path = $latest_accessed_path_candidate;
+
+	    $best_latest_accessed_time = $latest_accessed_time_candidate;
+
+	}
     }
 
     closedir(DIR);
     
-    return $latest_accessed;
+    return ($best_latest_accessed_path, $best_latest_accessed_time);
 }
 
 
@@ -660,6 +711,50 @@ sub size
     my $namespace_path = $self->get_namespace_path();
 
     return _recursive_directory_size($namespace_path);
+}
+
+
+# find the path to the cached file, taking into account the identifier, namespace, and cache depth
+
+sub _build_cached_file_path 
+{
+    my ($self, $identifier) = @_;
+
+    my $namespace_path = $self->get_namespace_path();
+
+    my $cache_depth = $self->get_cache_depth();
+
+    my (@path_prefix) = _extract_path_prefix($identifier, $cache_depth);
+
+    my $cached_file_path = _build_path($namespace_path);
+
+    foreach my $path_element (@path_prefix) {
+
+	$cached_file_path = _build_path($cached_file_path, $path_element);
+
+	_verify_directory($cached_file_path);	
+
+    }
+
+    $cached_file_path = _build_path($cached_file_path, $identifier);
+
+    return $cached_file_path;
+}
+
+
+# return a list of the first $cache_depth letters in the $identifier
+
+sub _extract_path_prefix  
+{
+    my ($identifier, $cache_depth) = @_;
+
+    my @path_prefix;
+
+    for (my $i = 0; $i < $cache_depth; $i++) {
+	push (@path_prefix, substr($identifier, $i, 1));
+    }
+
+    return @path_prefix;
 }
 
 
@@ -1064,6 +1159,24 @@ sub set_max_size
 
 
 
+# Gets the cache depth
+
+sub get_cache_depth 
+{
+    my ($self) = @_;
+
+    return $self->{_cache_depth};
+}
+
+
+# Sets the cache depth
+
+sub set_cache_depth 
+{
+    my ($self, $cache_depth) = @_;
+
+    $self->{_cache_depth} = $cache_depth;
+}
 
 
 1;
@@ -1112,13 +1225,16 @@ via the filesystem.
  # create a cache readable by the user and the user's
  # group in the specified namespace, where objects will
  # expire in one day, but may be removed from the cache
- # earlier if the size becomes more than a megabyte.
+ # earlier if the size becomes more than a megabyte. Also,
+ # request that the cache use subdirectories to increase
+ # performance of large number of objects
 
  my $cache = new File::Cache( { namespace  => 'MyCache', 
                                 expires_in => 86400,
                                 max_size => 1048576,
                                 username => 'shared_user',
-                                filemode => 0660 } );
+                                filemode => 0660,
+			        cache_depth => 3 } );
 
  # store a value in the cache (will expire in one day)
 
@@ -1247,8 +1363,15 @@ the value of auto_remove_stale.
 
 =item $options(auto_remove_stale}
 
-"auto_remove_stale" species that the cache should remove expired objects from
+"auto_remove_stale" specifies that the cache should remove expired objects from
 the cache when they are requested.
+
+=item $options(cache_depth}
+
+"cache_depth" specifies the depth of the subdirectories that should be created.  This is
+helpful when especially large numbers of objects are being cached (>1000) at once.  The optimal
+number of files per directory is dependent on the type of filesystem, so some hand-tuning
+may be required.
 
 =back
 

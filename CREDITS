@@ -11,5 +11,5 @@
 - Doug Steinwand <dsteinwand@etoys.com> found that on FreeBSD, the _purge routine
   failed due to an issue with File::Find and even provided a fix.  (thanks Doug!)
 
-
-
+- Chris Winters <cwinters@intes.net> needed the cache_depth code, so I added it,
+  and he was gracious enough to help test it

@@ -1,5 +1,13 @@
 Revision history for File::Cache
 
+0.07 2000-04-10-09-45
+  - added support for the "cache_depth" option that enables subdirectories in the cache
+    to increase performance when caching large numbers of objects
+  - rewrote the _recursive_find_nearest_expiration and _recursive_find_latest_accessed
+    routines to actually work recursively (needed to support cache_depth)   
+  - added a routine that avoids a race when removing files from the cache (thanks
+    to Jessica Mintz)
+ 
 0.06 2000-03-06-11-12
   - bug fixed where purge() didn't actually delete the cache file (David Coppit
     <david@coppit.org>)
