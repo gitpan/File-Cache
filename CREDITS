@@ -38,3 +38,7 @@
 - Neil Conway (nconway@klamath.dyndns.org) suggested documenting the 
   optional dependency on Storable, adding a dependency for File::Spec
   0.82, and removing the "use Data::Dumper" line.  (Thanks Neil!)
+
+- Jost Krieger <Jost.Krieger@ruhr-uni-bochum.de> and <a.calpini@alos.it>
+  both pointed out that the tests would fail on machines with the
+  perl binary not in "/usr/bin/perl". 

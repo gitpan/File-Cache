@@ -15,7 +15,7 @@ use vars qw(@ISA @EXPORT_OK $VERSION $sSUCCESS $sFAILURE $sTRUE $sFALSE
 	    $sEXPIRES_NOW $sEXPIRES_NEVER $sNO_MAX_SIZE $sGET_STALE_ONLY
 	    $sGET_FRESH_ONLY $CACHE_OBJECT_VERSION);
 
-$VERSION = '0.15';
+$VERSION = '0.16';
 
 # Describes the caches created by this version of File::Cache.  (Should
 # be incremented any time the cache file format changes in a way that
@@ -2785,7 +2785,7 @@ IPC::Cache, Storable, Data::Dumper
 
 =head1 AUTHOR
 
-DeWitt Clinton <dewitt@avacet.com>, and please see the CREDITS file
+DeWitt Clinton <dewitt@unto.net>, and please see the CREDITS file
 
 =cut
 

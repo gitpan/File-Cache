@@ -1,5 +1,12 @@
 Revision history for File::Cache
 
+0.16 2001-04-18-11-52
+  - prepared version 0.16 for release
+  - replaced the explicit system( ) call to invoke the subprocess get test
+    with a fork( ) instead
+  - changed email address to dewitt@unto.net
+  - started version 0.16
+
 0.15 2001-04-17-15-07
   - prepared version 0.15 for release
   - added a note about the release of Cache::Cache

@@ -22,7 +22,7 @@ BEGIN
 
   # The test set is repeated once for each implementation, plus the
   # first test
-  my $last_test_to_print = 
+  my $last_test_to_print =
     (($TEST_SET_SIZE) * ($#PERSISTENCE_MECHANISMS + 1)) + 1;
 
   print "1..$last_test_to_print\n";
@@ -76,457 +76,604 @@ sub skip_tests
   }
 }
 
+
 sub do_tests
 {
-my ($implementation,$test_number_start) = @_;
+  my ($implementation,$test_number_start) = @_;
 
-print "--> Testing $implementation implementation\n";
+  print "--> Testing $implementation implementation\n";
 
-# Test creation of a cache object
+  # Test creation of a cache object
 
-my $test = $test_number_start;
+  my $test = $test_number_start;
 
-my $cache1 = new File::Cache( { cache_key => $sTEST_CACHE_KEY,
-				namespace => $sTEST_NAMESPACE,
-			        max_size => $sMAX_SIZE,
-			        auto_remove_stale => 0,
-			        username => $sTEST_USERNAME,
-			        filemode => 0770,
-				implementation => $implementation,
-				cache_depth => $sTEST_CACHE_DEPTH } );
+  my $cache1 = new File::Cache( { cache_key => $sTEST_CACHE_KEY,
+                                  namespace => $sTEST_NAMESPACE,
+                                  max_size => $sMAX_SIZE,
+                                  auto_remove_stale => 0,
+                                  username => $sTEST_USERNAME,
+                                  filemode => 0770,
+                                  implementation => $implementation,
+                                  cache_depth => $sTEST_CACHE_DEPTH } );
 
-if ($cache1) {
+  if ($cache1)
+  {
     print "ok $test\n";
-} else {
+  }
+  else
+  {
     print "not ok $test\n";
-}
+  }
 
-# Test the setting of a scalar in the cache
 
-$test++;
+  # Test the setting of a scalar in the cache
 
-my $seed_value = "Hello World";
+  $test++;
 
-my $key = 'key1';
+  my $seed_value = "Hello World";
 
-my $status = $cache1->set($key, $seed_value);
+  my $key = 'key1';
 
-if ($status == $sSUCCESS) {
+  my $status = $cache1->set($key, $seed_value);
+
+  if ($status == $sSUCCESS)
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
-
-# Test the getting of a scalar from the cache
-
-$test++;
-
-my $val1_retrieved = $cache1->get($key);
-
-if ($val1_retrieved eq $seed_value) {
-    print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
-
-
-# Test the setting of a blessed object from the cache
-
-$test++;
-
-my $key2 = 'key2';
-
-$status = $cache1->set($key2, $cache1);
-
-if ($status == $sSUCCESS) {
-    print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
-
-# Test the getting of a blessed object from the cache
-
-$test++;
-
-my $cache1_retrieved = $cache1->get($key2);
-
-$val1_retrieved = $cache1_retrieved->get($key);
-
-if ($val1_retrieved eq $seed_value) {
-    print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
-
-
-
-# Test the getting of the scalar from a subprocess
-#
-# Note, this uses an explicit path the perl to avoid a taint.  
-# Not good, right?
-
-$test++;
-
-$status = system("/usr/bin/perl", "-Iblib/lib", "./test/test_get.pl", 
-		 $sTEST_CACHE_KEY, $sTEST_NAMESPACE, $sTEST_USERNAME, 
-		 $sTEST_CACHE_DEPTH, $implementation, $key, "\"$seed_value\"");
-
-if ($status == 0) {
-    print "ok $test\n";
-} else {
+  }
+  else
+  {
     print "not ok $test\n";
-}
+  }
 
+  # Test the getting of a scalar from the cache
 
-# Test checking the memory consumption of the cache
+  $test++;
 
-$test++;
+  my $val1_retrieved = $cache1->get($key);
 
-my $size = File::Cache::SIZE($sTEST_CACHE_KEY);
-
-if ($size > 0) {
-   print "ok $test\n";
-} else {
-    print "not ok $test\n";
-}
-
-
-# Test clearing the cache's namespace
-
-$test++;
-
-$status = $cache1->clear();
-
-if ($status == $sSUCCESS) {
+  if ($val1_retrieved eq $seed_value)
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 
 
-# Test the max_size limit
-# Intentionally add more data to the cache than fits in max_size
+  # Test the setting of a blessed object from the cache
 
-$test++;
+  $test++;
 
-my $string = 'abcdefghij';
+  my $key2 = 'key2';
 
-my $start_size = $cache1->size();
+  $status = $cache1->set($key2, $cache1);
 
-$cache1->set('initial_value', $string);
+  if ($status == $sSUCCESS)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 
-my $end_size = $cache1->size();
+  # Test the getting of a blessed object from the cache
 
-my $string_size = $end_size - $start_size;
+  $test++;
 
-my $cache_item = 0;
+  my $cache1_retrieved = $cache1->get($key2);
 
-# This should take the cache to nearly the edge
+  $val1_retrieved = $cache1_retrieved->get($key);
 
-while (($cache1->size() + $string_size) < $sMAX_SIZE) {
+  if ($val1_retrieved eq $seed_value)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
+
+
+  # Test the getting of the scalar from a subprocess
+
+  $test++;
+
+  my $pid = fork( );
+
+  if ( not defined $pid )
+  {
+    die( "Error forking\n" );
+  }
+  elsif ( $pid == 0 )
+  {
+    test_subprocess_get( $sTEST_CACHE_KEY,
+                         $sTEST_NAMESPACE,
+                         $sTEST_USERNAME,
+                         $sTEST_CACHE_DEPTH,
+                         $implementation,
+                         $key,
+                         $seed_value,
+                         $test );
+
+    exit( 1 );
+  }
+  else
+  {
+    sleep( 1 );
+  }
+
+
+  # Test checking the memory consumption of the cache
+
+  $test++;
+
+  my $size = File::Cache::SIZE($sTEST_CACHE_KEY);
+
+  if ($size > 0)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
+
+
+  # Test clearing the cache's namespace
+
+  $test++;
+
+  $status = $cache1->clear();
+
+  if ($status == $sSUCCESS)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
+
+
+  # Test the max_size limit
+  # Intentionally add more data to the cache than fits in max_size
+
+  $test++;
+
+  my $string = 'abcdefghij';
+
+  my $start_size = $cache1->size();
+
+  $cache1->set('initial_value', $string);
+
+  my $end_size = $cache1->size();
+
+  my $string_size = $end_size - $start_size;
+
+  my $cache_item = 0;
+
+  # This should take the cache to nearly the edge
+
+  while (($cache1->size() + $string_size) < $sMAX_SIZE)
+  {
     $cache1->set("item:$cache_item", $string);
     $cache_item++;
-}
+  }
 
-# This should put it over the top
+  # This should put it over the top
 
-$cache1->set("item:$cache_item", $string);
+  $cache1->set("item:$cache_item", $string);
 
-if ($cache1->size > $sMAX_SIZE) {
+  if ($cache1->size > $sMAX_SIZE)
+  {
     print "not ok $test\n";
-} else {
+  }
+  else
+  {
     print "ok $test\n";
-}
+  }
 
 
 
-# Test the getting of a scalar after the clearing of a cache
+  # Test the getting of a scalar after the clearing of a cache
 
-$test++;
+  $test++;
 
-my $val2_retrieved = $cache1->get($key);
+  my $val2_retrieved = $cache1->get($key);
 
-if ($val2_retrieved) {
+  if ($val2_retrieved)
+  {
     print "not ok $test\n";
-} else {
-   print "ok $test\n";
-}
-
-
-# Test the setting of a scalar in the cache with a immediate timeout
-
-$test++;
-
-$status = $cache1->set($key, $seed_value, 0);
-
-if ($status == $sSUCCESS) {
+  }
+  else
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
+  }
 
 
-# Test the getting of a scalar from the cache that should have timed out immediately
+  # Test the setting of a scalar in the cache with a immediate timeout
 
-$test++;
+  $test++;
 
-my $val3_retrieved = $cache1->get($key);
+  $status = $cache1->set($key, $seed_value, 0);
 
-if ($val3_retrieved) {
+  if ($status == $sSUCCESS)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
     print "not ok $test\n";
-} else {
-   print "ok $test\n";
-}
+  }
 
 
-# Test the getting of the expired scalar using get_stale
+  # Test the getting of a scalar from the cache that should have timed
+  # out immediately
 
-$test++;
+  $test++;
 
-my $val3_stale_retrieved = $cache1->get_stale($key);
+  my $val3_retrieved = $cache1->get($key);
 
-if ($val3_stale_retrieved) {
-    print "ok $test\n";
-} else {
+  if ($val3_retrieved)
+  {
     print "not ok $test\n";
-}
-
-    
-
-# Test the setting of a scalar in the cache with a timeout in the near future
-
-$test++;
-
-$status = $cache1->set($key, $seed_value, 2);
-
-if ($status == $sSUCCESS) {
+  }
+  else
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
+  }
 
 
-# Test the getting of a scalar from the cache that should not have timed out yet (unless the system is *really* slow)
+  # Test the getting of the expired scalar using get_stale
 
-$test++;
+  $test++;
 
-my $val4_retrieved = $cache1->get($key);
+  my $val3_stale_retrieved = $cache1->get_stale($key);
 
-if ($val4_retrieved eq $seed_value) {
+  if ($val3_stale_retrieved)
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
-
-
-# Test the getting of a scalar from the cache that should have timed out
-
-$test++;
-
-sleep(3);
-
-my $val5_retrieved = $cache1->get($key);
-
-if ($val5_retrieved) {
+  }
+  else
+  {
     print "not ok $test\n";
-} else {
-   print "ok $test\n";
-}
+  }
 
 
-# Test purging the cache's namespace
+  # Test the setting of a scalar in the cache with a timeout in the
+  # near future
 
-$test++;
+  $test++;
 
-$status = $cache1->purge();
+  $status = $cache1->set($key, $seed_value, 2);
 
-if ($status == $sSUCCESS) {
+  if ($status == $sSUCCESS)
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 
-# Test getting the creation time of the cache entry
 
-$test++;
+  # Test the getting of a scalar from the cache that should not have
+  # timed out yet (unless the system is *really* slow)
 
-my $timed_key = 'timed key';
+  $test++;
 
-my $creation_time = time();
+  my $val4_retrieved = $cache1->get($key);
 
-my $expires_in = 1000;
+  if ($val4_retrieved eq $seed_value)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 
-$cache1->set($timed_key, $seed_value, $expires_in);
 
-# Delay a bit
+  # Test the getting of a scalar from the cache that should have timed out
 
-sleep(2);
-    
-# Let's expect no more than 1 second delay between the creation of the cache
-# entry and our saving of the time.
+  $test++;
 
-my $cached_creation_time = $cache1->get_creation_time($timed_key);
+  sleep(3);
 
-my $creation_time_delta = $creation_time - $cached_creation_time;
+  my $val5_retrieved = $cache1->get($key);
 
-if ($creation_time_delta <= 1) {
+  if ($val5_retrieved)
+  {
+    print "not ok $test\n";
+  }
+  else
+  {
+    print "ok $test\n";
+  }
+
+
+  # Test purging the cache's namespace
+
+  $test++;
+
+  $status = $cache1->purge();
+
+  if ($status == $sSUCCESS)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
+
+
+  # Test getting the creation time of the cache entry
+
+  $test++;
+
+  my $timed_key = 'timed key';
+
+  my $creation_time = time();
+
+  my $expires_in = 1000;
+
+  $cache1->set($timed_key, $seed_value, $expires_in);
+
+
+  # Delay a bit
+
+  sleep(2);
+
+
+  # Let's expect no more than 1 second delay between the creation of
+  # the cache entry and our saving of the time.
+
+  my $cached_creation_time = $cache1->get_creation_time($timed_key);
+
+  my $creation_time_delta = $creation_time - $cached_creation_time;
+
+  if ($creation_time_delta <= 1)
+  {
     $status = 1;
-} else {
+  }
+  else
+  {
     $status = 0;
-}
+  }
 
-if ($status) {
+  if ($status)
+  {
     print "ok $test\n";
-} else {                                                                        
-   print "not ok $test\n";
-}   
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 
 
-# Test getting the expiration time of the cache entry
+  # Test getting the expiration time of the cache entry
 
-$test++;
+  $test++;
 
-my $expected_expiration_time = $cache1->get_creation_time($timed_key) + $expires_in;
+  my $expected_expiration_time =
+    $cache1->get_creation_time($timed_key) + $expires_in;
 
-my $actual_expiration_time = $cache1->get_expiration_time($timed_key);
+  my $actual_expiration_time = $cache1->get_expiration_time($timed_key);
 
-$status = $expected_expiration_time == $actual_expiration_time;
+  $status = $expected_expiration_time == $actual_expiration_time;
 
-if ($status) {
+  if ($status)
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 
 
 
-# Test PURGING of a cache object
+  # Test PURGING of a cache object
 
-$test++;
+  $test++;
 
-$status = File::Cache::PURGE($sTEST_CACHE_KEY);
+  $status = File::Cache::PURGE($sTEST_CACHE_KEY);
 
-if ($status == $sSUCCESS) {
+  if ($status == $sSUCCESS)
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 
 
-# Test the removal of a cached file
+  # Test the removal of a cached file
 
-$test++;
+  $test++;
 
-$status = $sSUCCESS;
+  $status = $sSUCCESS;
 
-my $remove_key = "foo";
+  my $remove_key = "foo";
 
-my $remove_value = "bar";
+  my $remove_value = "bar";
 
-$cache1->set($remove_key, $remove_value);
+  $cache1->set($remove_key, $remove_value);
 
-$cache1->get($remove_key) eq $remove_value or
+  $cache1->get($remove_key) eq $remove_value or
     $status = $sFAILURE;
 
-$cache1->remove($remove_key) or
+  $cache1->remove($remove_key) or
     $status = $sFAILURE;
 
-if (defined $cache1->get($remove_key)) {
+  if (defined $cache1->get($remove_key))
+  {
     $status = $sFAILURE;
-}
+  }
 
-if ($status == $sSUCCESS) {
+
+  if ($status == $sSUCCESS)
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 
 
-# Test CLEARING of a cache object
+  # Test CLEARING of a cache object
 
-$test++;
+  $test++;
 
-$status = File::Cache::CLEAR($sTEST_CACHE_KEY);
+  $status = File::Cache::CLEAR($sTEST_CACHE_KEY);
 
-if ($status == $sSUCCESS) {
+  if ($status == $sSUCCESS)
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
+
+
+  # Test directories not created unless needed
+
+  $test++;
+
+  File::Cache::CLEAR($sTEST_CACHE_KEY);
+
+  if (-e $sTEST_CACHE_KEY)
+  {
+    print "not ok $test\n";
+  }
+
+  $cache1 = new File::Cache( { cache_key => $sTEST_CACHE_KEY,
+                               implementation => $implementation,
+                               namespace => $sTEST_NAMESPACE } );
+
+  opendir(DIR, $sTEST_CACHE_KEY) or
+    croak("Couldn't open directory $sTEST_CACHE_KEY: $!");
+
+  my @dirents = readdir(DIR);
+
+  closedir DIR;
+
+  my @files = grep { $_ !~ /^(\.|\.\.|.description)$/ } @dirents;
+
+  if (!@files)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
+
+  File::Cache::CLEAR($sTEST_CACHE_KEY);
+
+
+  # Test the setting of a binary scalar in the cache
+
+  $test++;
+
+  $cache1 = new File::Cache( { cache_key => $sTEST_CACHE_KEY,
+                               implementation => $implementation,
+                               namespace => $sTEST_NAMESPACE } );
+
+  # Make a string of all possible ASCII characters
+  $seed_value = '';
+
+  for (my $i = 0; $i < 256 ; $i++)
+  {
+    $seed_value .= chr($i);
+  }
+
+  my $binary_key = 'key1';
+
+  $status = $cache1->set($binary_key, $seed_value);
+
+  if ($status == $sSUCCESS)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
+
+
+  # Test the getting of a binary scalar from the cache
+
+  $test++;
+
+  my $val6_retrieved = $cache1->get($binary_key);
+
+  if ($val6_retrieved eq $seed_value)
+  {
+    print "ok $test\n";
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
+
+  File::Cache::CLEAR($sTEST_CACHE_KEY);
 }
 
 
-# Test directories not created unless needed
-
-$test++;
-
-File::Cache::CLEAR($sTEST_CACHE_KEY);
-
-if (-e $sTEST_CACHE_KEY)
+sub test_subprocess_get
 {
-   print "not ok $test\n";
-}
+  my ( $cache_key, $namespace, $username, $cache_depth, $implementation,
+       $key, $expected_value, $test ) = @_;
 
-$cache1 = new File::Cache( { cache_key => $sTEST_CACHE_KEY,
-              implementation => $implementation,
-				namespace => $sTEST_NAMESPACE } );
+  $cache_key or
+    die( 'cache_key required' );
 
-opendir(DIR, $sTEST_CACHE_KEY) or
-  croak("Couldn't open directory $sTEST_CACHE_KEY: $!");
-          
-my @dirents = readdir(DIR);
+  $namespace or
+    die( 'namespace required' );
 
-closedir DIR;
+  $username or
+    die( 'username required' );
 
-my @files = grep { $_ !~ /^(\.|\.\.|.description)$/ } @dirents;
+  $cache_depth or
+    die( 'cache_depth required' );
 
-if (!@files) {
+  $implementation or
+    die( 'implementation required' );
+
+  $key or
+    die( 'key required' );
+
+  $expected_value or
+    die( 'expected_value required' );
+
+  $test or
+    die( 'test required' );
+
+  my $cache = new File::Cache( { cache_key => $cache_key,
+                                 namespace => $namespace,
+                                 username => $username,
+                                 implementation => $implementation,
+                                 cache_depth => $cache_depth } ) or
+                                   die("Couldn't create cache");
+
+  my $value = $cache->get($key) or
+    die( "Couldn't get object at $key" );
+
+  if ( $value eq $expected_value )
+  {
     print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
-
-File::Cache::CLEAR($sTEST_CACHE_KEY);
-
-# Test the setting of a binary scalar in the cache
-
-$test++;
-
-$cache1 = new File::Cache( { cache_key => $sTEST_CACHE_KEY,
-              implementation => $implementation,
-				namespace => $sTEST_NAMESPACE } );
-
-# Make a string of all possible ASCII characters
-$seed_value = '';
-
-for (my $i = 0; $i < 256 ; $i++)
-{
-  $seed_value .= chr($i);
-}
-
-my $binary_key = 'key1';
-
-$status = $cache1->set($binary_key, $seed_value);
-
-if ($status == $sSUCCESS) {
-    print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
-
-# Test the getting of a binary scalar from the cache
-
-$test++;
-
-my $val6_retrieved = $cache1->get($binary_key);
-
-if ($val6_retrieved eq $seed_value) {
-    print "ok $test\n";
-} else {
-   print "not ok $test\n";
-}
-
-File::Cache::CLEAR($sTEST_CACHE_KEY);
-
+  }
+  else
+  {
+    print "not ok $test\n";
+  }
 }
 
 1;
