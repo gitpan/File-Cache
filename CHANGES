@@ -1,0 +1,33 @@
+Revision history for File::Cache
+
+0.01 2000-02-10-09-22
+  - original version, created by dclinton@eziba.com
+
+0.02 2000-02-14-16-52
+  - set the default file and directory creation umask
+    to 0000 as a temporary fix to the file permission
+    problem
+
+0.03 2000-02-16-02-10
+  - set the default file and directory creation umask
+    to 0000 as a *really* temporary fix
+
+0.04 2000-02-16-14-48
+  - create a per-user namespace to better deal with file 
+    permission problems when more than one user wants
+    to use File::Cache
+  - only create a globally read/write directory for 
+    the default root of the cache (i.e., /tmp/File::Cache/)
+  - implemented size and SIZE
+  - added the _verify_directory routine for better 
+    encapsulation of that functionality
+  - updated documentation
+  - first submitted to CPAN
+  - modified test.pl to use "/tmp/TMPC" as a namespace
+  - updated the requirements in Makefile.PL
+  - updated the requirements in the README
+ 
+
+
+
+
