@@ -1,16 +1,28 @@
 Revision history for File::Cache
 
-0.01 2000-02-10-09-22
-  - original version, created by dclinton@eziba.com
+0.06 2000-03-06-11-12
+  - bug fixed where purge() didn't actually delete the cache file (David Coppit
+    <david@coppit.org>)
+  - auto_purge, username, max_size, and filemode options added (David Coppit
+    <david@coppit.org>)
+  - cache_path was renamed user_path
+  - set/get methods added for auto_purge, username, max_size, expires_in 
+    and filemode, namespace_path, cache_key, cache_path, and user_path 
+    (David Coppit <david@coppit.org>)
+  - automatic cache size reduction added to set() method, and reduce_size()
+    method created (David Coppit <david@coppit.org>)
+  - fixed the CHANGES file to reflect the version 0.05 changes
+  - updated the perldoc (David Coppit <david@coppit.org>)
+  - now using File::Spec for the path generation (thanks for David for the 
+    idea)
+  - updated the test.pl and test/test_get.pl scripts to include tests for
+    setting the username, filemode, and max_size
 
-0.02 2000-02-14-16-52
-  - set the default file and directory creation umask
-    to 0000 as a temporary fix to the file permission
-    problem
-
-0.03 2000-02-16-02-10
-  - set the default file and directory creation umask
-    to 0000 as a *really* temporary fix
+0.05 2000-02-22-16-23
+  - updated the requirements in the README
+  - provided a default username if getpwuid is not available (MacOS)
+  - fixed a problem where _purge failed on FreeBSD (thanks to
+    Doug Steinwand)
 
 0.04 2000-02-16-14-48
   - create a per-user namespace to better deal with file 
@@ -25,9 +37,20 @@ Revision history for File::Cache
   - first submitted to CPAN
   - modified test.pl to use "/tmp/TMPC" as a namespace
   - updated the requirements in Makefile.PL
-  - updated the requirements in the README
-  - provided a default username if getpwuid is not available (MacOS)
-  - fixed a problem where _purge failed on FreeBSD (thanks to
-    Doug Steinwand)
+
+0.03 2000-02-16-02-10
+  - set the default file and directory creation umask
+    to 0000 as a *really* temporary fix
+
+0.02 2000-02-14-16-52
+  - set the default file and directory creation umask
+    to 0000 as a temporary fix to the file permission
+    problem
+
+0.01 2000-02-10-09-22
+  - original version, created by dclinton@eziba.com
+
+
+
 
 

@@ -8,7 +8,7 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN { $| = 1; print "1..16\n"; }
+BEGIN { $| = 1; print "1..18\n"; }
 END {print "not ok 1\n" unless $loaded;}
 
 use File::Cache;
@@ -19,16 +19,24 @@ print "ok 1\n";
 
 ######################### End of black magic.
 
+use strict;
 
 my $sTEST_CACHE_KEY = "/tmp/TSTC";
 my $sTEST_NAMESPACE = "TestCache";
+my $sMAX_SIZE = 1000;
+my $sTEST_USERNAME = "web";
 
 # Test creation of a cache object
 
 my $test = 2;
 
 my $cache1 = new File::Cache( { cache_key => $sTEST_CACHE_KEY,
-			       namespace => $sTEST_NAMESPACE } );
+				namespace => $sTEST_NAMESPACE,
+			        max_size => $sMAX_SIZE,
+			        auto_remove_stale => 0,
+			        username => $sTEST_USERNAME,
+			        filemode => 0770 } );
+
 if ($cache1) {
     print "ok $test\n";
 } else {
@@ -67,7 +75,8 @@ if ($val1_retrieved eq $seed_value) {
 
 $test = 5;
 
-if (system("perl", "-Iblib/lib", "./test/test_get.pl", $sTEST_CACHE_KEY, $sTEST_NAMESPACE, $key, $seed_value) == 0) {
+if (system("perl", "-Iblib/lib", "./test/test_get.pl", 
+	   $sTEST_CACHE_KEY, $sTEST_NAMESPACE, $sTEST_USERNAME, $key, $seed_value) == 0) {
     print "ok $test\n";
 } else {
     print "not okay $test\n";
@@ -100,9 +109,46 @@ if ($status) {
 }
 
 
-# Test the getting of a scalar after the clearing of a cache
+
+# Test the max_size limit
+# Intentionally add more data to the cache than fits in max_size
 
 $test = 8;
+
+my $string = 'abcdefghij';
+
+my $start_size = $cache1->size();
+
+$cache1->set('initial_value', $string);
+
+my $end_size = $cache1->size();
+
+my $string_size = $end_size - $start_size;
+
+my $cache_item = 0;
+
+# This should take the cache to nearly the edge
+
+while (($cache1->size() + $string_size) < $sMAX_SIZE) {
+    $cache1->set("item:$cache_item", $string);
+    $cache_item++;
+}
+
+# This should put it over the top
+
+$cache1->set("item:$cache_item", $string);
+
+if ($cache1->size > $sMAX_SIZE) {
+    print "not ok $test\n";
+} else {
+    print "ok $test\n";
+}
+
+
+
+# Test the getting of a scalar after the clearing of a cache
+
+$test = 9;
 
 my $val2_retrieved = $cache1->get($key);
 
@@ -115,7 +161,7 @@ if ($val2_retrieved) {
 
 # Test the setting of a scalar in the cache with a immediate timeout
 
-$test = 9;
+$test = 10;
 
 $status = $cache1->set($key, $seed_value, 0);
 
@@ -128,7 +174,7 @@ if ($status) {
 
 # Test the getting of a scalar from the cache that should have timed out immediately
 
-$test = 10;
+$test = 11;
 
 my $val3_retrieved = $cache1->get($key);
 
@@ -139,9 +185,23 @@ if ($val3_retrieved) {
 }
 
 
+# Test the getting of the expired scalar using get_stale
+
+$test = 12;
+
+my $val3_stale_retrieved = $cache1->get_stale($key);
+
+if ($val3_stale_retrieved) {
+    print "ok $test\n";
+} else {
+    print "not ok $test\n";
+}
+
+    
+
 # Test the setting of a scalar in the cache with a timeout in the near future
 
-$test = 11;
+$test = 13;
 
 $status = $cache1->set($key, $seed_value, 2);
 
@@ -154,7 +214,7 @@ if ($status) {
 
 # Test the getting of a scalar from the cache that should not have timed out yet (unless the system is *really* slow)
 
-$test = 12;
+$test = 14;
 
 my $val4_retrieved = $cache1->get($key);
 
@@ -167,7 +227,7 @@ if ($val4_retrieved eq $seed_value) {
 
 # Test the getting of a scalar from the cache that should have timed out
 
-$test = 13;
+$test = 15;
 
 sleep(3);
 
@@ -182,7 +242,7 @@ if ($val5_retrieved) {
 
 # Test purging the cache's namespace
 
-$test = 14;
+$test = 16;
 
 $status = $cache1->purge();
 
@@ -196,7 +256,7 @@ if ($status) {
 
 # Test PURGING of a cache object
 
-$test = 15;
+$test = 17;
 
 $status = File::Cache::PURGE($sTEST_CACHE_KEY);
 
@@ -209,7 +269,7 @@ if ($status) {
 
 # Test CLEARING of a cache object
 
-$test = 16;
+$test = 18;
 
 $status = File::Cache::CLEAR($sTEST_CACHE_KEY);
 

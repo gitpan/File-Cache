@@ -1,3 +1,6 @@
+- David Coppit <david@coppit.org> added: max_size, auto_purge, get_stale(),
+  reduce_size(), username, and filemode, and fixed a bug that prevented
+  expired cache items from being unlinked by purge(). (a big thanks David!)
 
 - Larry Moore <ljmoore@freespace.net>, a cpan tester, noticed that version 0.04 
   failed to compile on MacOS (thanks Larry!)

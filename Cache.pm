@@ -8,17 +8,27 @@ use Storable qw(freeze thaw dclone);
 use Digest::MD5  qw(md5_hex);
 use File::Path;
 use File::Find;
+use File::Spec;
 use vars qw($VERSION);
 
 
-$VERSION = '0.05';
+$VERSION = '0.06';
+
+# Constants
+
+my $sSUCCESS = 1;
+my $sFAILURE = 0;
+
+my $sTRUE = 1;
+my $sFALSE = 0;
 
 my $sEXPIRES_NOW = 0;
 my $sEXPIRES_NEVER = -1;
-my $sSUCCESS = 1;
-my $sFAILURE = 0;
-my $sTRUE = 1;
-my $sFALSE = 0;
+
+my $sNO_MAX_SIZE = -1;
+
+my $sGET_STALE_ONLY = 1;
+my $sGET_FRESH_ONLY = 0;
 
 
 # The default cache key is used to address the temp filesystem
@@ -30,6 +40,30 @@ my $sDEFAULT_CACHE_KEY = '/tmp/File::Cache';
 
 my $sDEFAULT_NAMESPACE = "_default";
 
+
+# by default, remove objects that have expired when then are requested
+
+my $sDEFAULT_AUTO_REMOVE_STALE = $sTRUE;
+
+
+# by default, the filemode is world read/writable
+
+my $sDEFAULT_FILEMODE = 0777;
+
+
+# by default, there is no max size to the cache
+
+my $sDEFAULT_MAX_SIZE = $sNO_MAX_SIZE;
+
+
+# if the OS does not support getpwuid, use this as a default username
+
+my $sDEFAULT_USERNAME = 'nobody';
+
+
+# by default, the objects in the cache never expire
+
+my $sDEFAULT_GLOBAL_EXPIRES_IN = $sEXPIRES_NEVER;
 
 
 # create a new Cache object that can be used to persist
@@ -43,50 +77,67 @@ sub new
     bless ($self, $class);
 
 
-    # this instance will use the namespace specified or the default
+    # remove objects from the cache that have expired on retrieval when this is set
 
-    my $namespace = $options->{namespace} || $sDEFAULT_NAMESPACE;
+    my $auto_remove_stale = defined $options->{auto_remove_stale} ? $options->{auto_remove_stale} : $sDEFAULT_AUTO_REMOVE_STALE;
 
-    $self->{_namespace} = $namespace;
+    $self->set_auto_remove_stale($auto_remove_stale);
+
+
+    # username is either specified or searched for in an OS independent way
+
+    my $username = defined $options->{username} ?  $options->{username} : _find_username();
+
+    $self->set_username($username);
+
+
+    # the max cache size is either specified by the user or no max
+
+    my $max_size = defined $options->{max_size} ? $options->{max_size} : $sDEFAULT_MAX_SIZE;
+
+    $self->set_max_size($max_size);
+
+
+    # the user can specify the filemode
+
+    my $filemode = defined $options->{filemode} ? $options->{filemode} : $sDEFAULT_FILEMODE;
+
+    $self->set_filemode($filemode);
 
 
     # remember the expiration delta to be used for all objects if specified
 
-    $self->{_expires_in} = $options->{expires_in} || $sEXPIRES_NEVER;
+    my $global_expires_in = defined $options->{expires_in} ? $options->{expires_in} : $sDEFAULT_GLOBAL_EXPIRES_IN;
+
+    $self->set_global_expires_in($global_expires_in);
 
 
     # verify that the cache space exists
 
-    my $cache_key = $options->{cache_key} || $sDEFAULT_CACHE_KEY;
+    my $cache_key = defined $options->{cache_key} ? $options->{cache_key} : $sDEFAULT_CACHE_KEY;
 
-    _verify_directory($cache_key, 0000) or
-	croak("Couldn't verify directory $cache_key");
+    $self->set_cache_key($cache_key);
 
-    $self->{_cache_key} = $cache_key;
+
+    # this instance will use the namespace specified or the default
+
+    my $namespace = defined $options->{namespace} ? $options->{namespace} : $sDEFAULT_NAMESPACE;
+
+    $self->set_namespace($namespace);
 
 
     # create a path for this particular user, and verify that it exists
 
-    my $username = _get_username();
+    my $user_path = _build_path($cache_key, $username);
 
-    my $cache_path = _build_path($cache_key, $username);
-
-    _verify_directory($cache_path) or
-	croak("Couldn't verify directory $cache_path");
-
-    $self->{_cache_path} = $cache_path;
-
+    $self->set_user_path($user_path);
 
 
     # create a path for this namespace, and verify that it exists
 
-    my $namespace_path = _build_path($cache_path, $namespace) or
-	croak("Couldn't build namespace path");
+    my $namespace_path = _build_path($user_path, $namespace);
 
-    _verify_directory($namespace_path) or
-	croak("Couldn't verify directory $cache_path");
-
-    $self->{_namespace_path} = $namespace_path;
+    $self->set_namespace_path($namespace_path);
     
 
     return $self;
@@ -105,24 +156,22 @@ sub set
 
     $identifier = md5_hex($identifier);
 
-    my $namespace_path = $self->{_namespace_path} or
-	croak("namespace path required");
-
-    _verify_directory($namespace_path) or
-	croak("Couldn't verify directory $namespace_path");
+    my $namespace_path = $self->get_namespace_path();
 
     my $file_path = _build_path($namespace_path, $identifier);
 
     # expiration time is based on a delta from the current time
     # if expires_in is defined, the object will expire in that number of seconds from now
-    #  else if expires_in is undefined, it will expire based on the global _expires_in
-    
+    #  else if expires_in is undefined, it will expire based on the global_expires_in
+
+    my $global_expires_in = $self->get_global_expires_in();
+
     my $expires_at;
 
     if (defined $expires_in) {
 	$expires_at = time() + $expires_in;
-    } elsif ($self->{_expires_in} ne $sEXPIRES_NEVER) {
-	$expires_at = time() + $self->{_expires_in};
+    } elsif ($global_expires_in ne $sEXPIRES_NEVER) {
+	$expires_at = time() + $global_expires_in;
     } else {
 	$expires_at = $sEXPIRES_NEVER;
     }
@@ -134,30 +183,68 @@ sub set
     
     my $frozen_object_data = freeze(\%object_data);
 
-    _write_file($file_path, \$frozen_object_data);
+    # Figure out what the new size of the cache should be in order to
+    # accomodate the new data and still be below the max_size. Then reduce the
+    # size.
+    
+    my $max_size = $self->get_max_size();
 
+    if ($max_size != $sNO_MAX_SIZE) {
+      my $new_size = $max_size - length $frozen_object_data;
+      $new_size = 0 if $new_size < 0;
+      $self->reduce_size($new_size);
+    }
+
+    my $filemode = $self->get_filemode();
+
+    _write_file($file_path, \$frozen_object_data, $filemode);
 
     return $sSUCCESS;
 }
 
 
 
-# retrieve an object from the cache associated with the identifier
+# retrieve an object from the cache associated with the identifier, and remove
+# it from the cache if its expiration has elapsed and auto_remove_stale is
+# 1.
 
 sub get 
 {
     my ($self, $identifier) = @_;
+
+    my $object = $self->_get($identifier, $sGET_FRESH_ONLY);
+    
+    return $object;
+}
+
+
+# retrieve an object from the cache associated with the identifier, but only
+# if it's stale
+
+sub get_stale 
+{
+    my ($self, $identifier) = @_;
+
+    my $object = $self->_get($identifier, $sGET_STALE_ONLY);
+    
+    return $object;
+}
+
+
+# Gets the stale or non-stale data from the cache, depending on the second
+# parameter ($sGET_STALE_ONLY or $sGET_FRESH_ONLY)
+
+sub _get 
+{
+    my ($self, $identifier, $freshness) = @_;
 
     $identifier or
 	croak("identifier required");
 
     $identifier = md5_hex($identifier);
 
-    my $namespace_path = $self->{_namespace_path} or
+    my $namespace_path = $self->get_namespace_path() or
 	croak("namespace path required");
-
-    _verify_directory($namespace_path) or
-	croak("Couldn't verify directory $namespace_path");
 
     my $file_path = _build_path($namespace_path, $identifier);
 
@@ -174,17 +261,41 @@ sub get
 	my $object = $object_data{object};
 
 	my $expires_at = $object_data{expires_at};
+	
+	# If we want non-stale data...
+	if ($freshness eq $sGET_FRESH_ONLY) {
 
-	if (_s_should_expire($expires_at)) {
-	    unlink($file_path) or
-		croak("Couldn't remove $file_path");
+	    # Check if the cache item has expired
+	    if (_s_should_expire($expires_at)) {
+
+		# Remove the item from the cache if auto_remove_stale is $sTRUE;
+		my $auto_remove_stale = $self->get_auto_remove_stale();
+		
+		if ($auto_remove_stale eq $sTRUE) {
+		    unlink($file_path) or
+			croak("Couldn't remove $file_path");
+		}
+
+	    # otherwise fetch the object and return a copy
+	    } else {
+		$cloned_object = (ref $object) ? dclone($object) : $object;
+	    }
+
+	# If we want stale data...
 	} else {
-	    $cloned_object = (ref $object) ? dclone($object) : $object;
+	
+	    # and the cache item is indeed stale...
+	    if (_s_should_expire($expires_at)) {
+		
+		# fetch the object and return a copy
+		$cloned_object = (ref $object) ? dclone($object) : $object;
+	    }
 	}
     }
     
     return $cloned_object;
 }
+
 
 
 # check to see if a directory exists, and create it with option mask if it doesn't
@@ -239,11 +350,7 @@ sub clear
 {
     my ($self) = @_;
 
-    my $namespace_path = $self->{_namespace_path} or
-	croak("namespace path required");
-
-    _verify_directory($namespace_path) or
-	croak("Couldn't verify directory $namespace_path");
+    my $namespace_path = $self->get_namespace_path();
 
     rmtree($namespace_path) or
 	croak("Couldn't clear namespace");
@@ -259,11 +366,7 @@ sub purge
 {
     my ($self) = @_;
 
-    my $namespace_path = $self->{_namespace_path} or
-	croak("namespace path required");
-
-    _verify_directory($namespace_path) or
-	croak("Couldn't verify directory $namespace_path");
+    my $namespace_path = $self->get_namespace_path();
 
     find(\&_purge_file_wrapper, $namespace_path);
 
@@ -277,8 +380,10 @@ sub _purge_file_wrapper
 {
     my $file_path = $File::Find::name;
 
-    if (-f $file_path) {
-	_purge_file($file_path);
+    my ($file) = $file_path =~ m|.*/(.*?)$|;
+
+    if (-f $file) {
+	_purge_file($file);
     } else {
 	return;
     }
@@ -289,19 +394,19 @@ sub _purge_file_wrapper
 
 sub _purge_file
 {
-    my ($file_path) = @_;
+    my ($file) = @_;
 
     my %object_data;
 
-    _read_object_data($file_path, \%object_data);
+    _read_object_data($file, \%object_data);
 
     if (%object_data) {
 	
 	my $expires_at = $object_data{expires_at};
 
 	if (_s_should_expire($expires_at)) {
-	    unlink($file_path) or
-		croak("Couldn't unlink $file_path");
+	    unlink($file) or
+		croak("Couldn't unlink $file");
 	}
 	
     }
@@ -316,13 +421,9 @@ sub _purge_all
 {
     my ($self) = @_;
 
-    my $cache_path = $self->{_cache_path} or
-	croak("cache path required");
+    my $user_path = $self->get_user_path();
 
-    _verify_directory($cache_path) or
-	croak("Couldn't verify directory $cache_path");
-
-    find(\&_purge_file_wrapper, $cache_path);
+    find(\&_purge_file_wrapper, $user_path);
 
     return $sSUCCESS;    
 }
@@ -351,18 +452,212 @@ sub _s_should_expire
 }
 
 
+# reduce this namespace to a given size
 
-# use this cache instance's frozen data to get an estimate of the memory consumption
+sub reduce_size
+{
+    my ($self, $new_size) = @_;
 
-sub _size 
+    $new_size >= 0 or 
+	croak("size >= 0 required");
+
+    my $namespace_path = $self->get_namespace_path();
+
+    while ($self->size() > $new_size) {
+
+	my $victim_file = $self->_choose_victim_file($namespace_path);
+
+	unlink($victim_file) or
+	    croak("Couldn't remove $victim_file");
+
+    }
+
+    return $sSUCCESS;
+}
+
+
+
+# reduce the entire cache size to a given size
+
+sub REDUCE_SIZE
+{
+    my ($self, $new_size, $cache_key) = @_;
+
+    $new_size >= 0 or 
+	croak("size >= 0 required");
+
+    $cache_key = $cache_key || $sDEFAULT_CACHE_KEY;
+
+    while ($self->SIZE() > $new_size) {
+	
+	my $victim_file = $self->_choose_victim_file($cache_key);
+	
+	unlink($victim_file) or
+	    croak("Couldn't remove $victim_file");
+
+    }
+
+    return $sSUCCESS;
+}
+
+
+# Choose a "victim" cache entry to remove. First get the one with the closest
+# expiration, or (if that's not available), the least recently accessed one.
+
+sub _choose_victim_file
+{
+    my ($self, $root) = @_;
+
+    # Look for the file to delete with the nearest expiration
+
+    my $nearest_expiration = _recursive_find_nearest_expiration($root);
+
+    return $nearest_expiration if defined $nearest_expiration;
+
+    # If there are no files with expirations, get the least recently accessed one
+
+    my $latest_accessed = _recursive_find_latest_accessed($root);
+
+    return $latest_accessed;
+}
+
+
+# Recursively searches a cache namespace for the cache entry with the nearest
+# expiration. Returns undef if no cache entry with an expiration time could be
+# found.
+
+sub _recursive_find_nearest_expiration
+{
+    my ($directory) = @_;
+
+    my $nearest_expiration = undef;
+    
+    my $nearest_expiration_time = undef;
+
+    opendir(DIR, $directory) or
+	croak("Couldn't open directory $directory: $!");
+    
+    my @dirents = readdir(DIR);
+    
+    foreach my $dirent (@dirents) {
+
+	next if $dirent eq '.' or $dirent eq '..';
+
+	my $path = _build_path($directory, $dirent);
+
+	if (-d $path) {
+
+	    $nearest_expiration = _recursive_find_nearest_expiration($path);
+
+	} else {
+
+	    my %object_data;
+
+	    # Careful not to change the access time
+	    {
+		my ($file_access_time, $file_modified_time) = (stat($path))[8,9];
+		_read_object_data($path, \%object_data);
+		utime($file_access_time, $file_modified_time, $path);
+	    }
+
+	    %object_data or
+		croak("Couldn't read cache data for file $path");
+		
+	    my $expires_at = $object_data{expires_at};
+
+	    # Skip this file if it doesn't have an expiration time.
+	    next if $expires_at == $sEXPIRES_NEVER;
+
+	    # Compare expiration with best one so far.
+	    if (defined $nearest_expiration) {
+
+		# Careful! We have to be sure that already expired items get booted
+		# first! 5 > -2, so we're okay.
+		if ($nearest_expiration_time > $expires_at) {
+		    $nearest_expiration = $path;
+		    $nearest_expiration_time = $expires_at;
+		}
+
+	    # ... or just store the value if this is the first cache entry we've
+	    # encountered
+
+	    } else {
+		$nearest_expiration = $path;
+		$nearest_expiration_time = $expires_at;
+	    }
+	}
+
+    }
+
+    closedir(DIR);
+    
+    return $nearest_expiration;
+}
+
+
+
+# Recursively searches a cache namespace for the cache entry with the latest
+# access time. Precondition: there is at least one cache entry in the cache.
+# (This should be true as long as this function is called only when the cache
+# size is greater than 0.)
+
+sub _recursive_find_latest_accessed
+{
+    my ($directory) = @_;
+
+    my $latest_accessed = undef;
+
+    my $latest_accessed_time = undef;
+
+    opendir(DIR, $directory) or
+	croak("Couldn't open directory $directory: $!");
+    
+    my @dirents = readdir(DIR);
+    
+    foreach my $dirent (@dirents) {
+
+	next if $dirent eq '.' or $dirent eq '..';
+
+	my $path = _build_path($directory, $dirent);
+
+	if (-d $path) {
+
+	    $latest_accessed = _recursive_find_latest_accessed($path);
+
+	} else {
+
+	    my $last_accessed_time = (stat($path))[8];
+
+	    # Compare last accessed time with best one so far.
+	    if (defined $latest_accessed) {
+		if ($latest_accessed_time > $last_accessed_time) {
+		    $latest_accessed = $path;
+		    $latest_accessed_time = $last_accessed_time;
+		}
+
+	    # ... or just store the value if this is the first cache entry we've
+	    # encountered
+	    } else {
+		$latest_accessed = $path;
+		$latest_accessed_time = $last_accessed_time;
+	    }
+	}	
+    }
+
+    closedir(DIR);
+    
+    return $latest_accessed;
+}
+
+
+
+# recursively descend to get an estimate of the memory consumption for this namespace
+
+sub size 
 {
     my ($self) = @_;
 
-    my $namespace_path = $self->{_namespace_path} or
-	croak("namespace path required");
-
-    _verify_directory($namespace_path) or
-	croak("Couldn't verify directory $namespace_path");
+    my $namespace_path = $self->get_namespace_path();
 
     return _recursive_directory_size($namespace_path);
 }
@@ -379,9 +674,7 @@ sub _build_path
 	croak("Illegal path characters ..");
     }
     
-    my $path = join('/', @elements);
-
-    $path =~ s|/+|/|g;
+    my $path = File::Spec->catfile(@elements);
 
     return $path;
 }
@@ -413,13 +706,17 @@ sub _read_file
 
 sub _write_file 
 {
-    my ($filename, $data_ref) = @_;
+    my ($filename, $data_ref, $mode) = @_;
 
     $filename or
 	croak("filename required");
 
+    $mode = 0600 unless defined $mode;
+
     open(FILE, ">$filename") or
 	croak("Couldn't open $filename for writing: $!\n");
+
+    chmod $mode, $filename;
 
     print FILE $$data_ref;
 
@@ -511,20 +808,262 @@ sub _recursive_directory_size
 }
 
 
-sub _get_username 
-{
-    my $effective_uid = $>;
 
-    my $username; 
+# Find the username of the person running the process in an OS independent way 
+
+sub _find_username 
+{
+    my ($self) = @_;
+    
+    my $username;
 
     my $success = eval {
-	$username = getpwuid($effective_uid);
+	my $effective_uid = $>;
+	$username = getpwuid($effective_uid);	
     };
-    
-    $username = 'nobody' if !$success;
-
-    return $username;
+      
+    if ($success and $username) {
+	return $username;
+    } else {
+	return $sDEFAULT_USERNAME;
+    }
 }
+
+
+
+
+# Get whether or not we automatically remove stale data from the cache on retrieval
+
+sub get_auto_remove_stale 
+{
+    my ($self) = @_;
+
+    return $self->{_auto_remove_stale};
+}
+
+
+# Set whether or not we automatically remove stale data from the cache on retrieval
+
+sub set_auto_remove_stale 
+{
+    my ($self, $auto_remove_stale) = @_;
+
+    $self->{_auto_remove_stale} = $auto_remove_stale;
+}
+
+
+
+# Get the root of this cache on the filesystem
+
+sub get_cache_key 
+{
+    my ($self) = @_;
+
+    my $cache_key = $self->{_cache_key};
+
+    _verify_directory($cache_key, 0000) or
+	croak("Couldn't verify directory $cache_key");
+
+    return $cache_key;
+}
+
+
+# Set the root of this cache on the filesystem
+# TODO:  This should probably trigger a rebuilding of the user_path
+# and the namespace_path
+
+sub set_cache_key 
+{
+    my ($self, $cache_key) = @_;
+
+    _verify_directory($cache_key, 0000) or
+	croak("Couldn't verify directory $cache_key");
+
+    $self->{_cache_key} = $cache_key;
+}
+
+
+
+# Get the root of this user's path
+
+sub get_user_path 
+{
+    my ($self) = @_;
+
+    my $user_path = $self->{_user_path};
+
+    _verify_directory($user_path) or
+	croak("Couldn't verify directory $user_path");
+    
+    return $user_path;
+}
+
+
+
+# Set the root of this user's path
+# TODO:  This should probably trigger a rebuild of the namespace path
+
+sub set_user_path 
+{
+    my ($self, $user_path) = @_;
+
+    _verify_directory($user_path) or
+	croak("Couldn't verify directory $user_path");
+
+    $self->{_user_path} = $user_path;
+}
+
+
+
+
+# Get the root of this namespace's path
+
+sub get_namespace_path 
+{
+    my ($self) = @_;
+
+    my $namespace_path = $self->{_namespace_path};
+
+    _verify_directory($namespace_path) or
+	croak("Couldn't verify directory $namespace_path");
+    
+    return $namespace_path;
+}
+
+
+
+# Set the root of this namespaces's path
+
+sub set_namespace_path 
+{
+    my ($self, $namespace_path) = @_;
+
+    _verify_directory($namespace_path) or
+	croak("Couldn't verify directory $namespace_path");
+
+    $self->{_namespace_path} = $namespace_path;
+}
+
+
+
+
+
+# Get the namespace for this cache instance (within the entire cache)
+
+sub get_namespace 
+{
+    my ($self) = @_;
+
+    return $self->{_namespace};
+}
+
+
+# Set the namespace for this cache instance (within the entire cache)
+# TODO:  This should probably trigger a rebuild of the namespace path
+
+sub set_namespace 
+{
+    my ($self, $namespace) = @_;
+
+    $self->{_namespace} = $namespace;
+}
+
+
+
+# Get the global expiration value for the cache
+
+sub get_global_expires_in 
+{
+    my ($self) = @_;
+
+    return $self->{_global_expires_in};
+}
+
+
+# Set the global expiration value for the cache
+
+sub set_global_expires_in 
+{
+    my ($self, $global_expires_in) = @_;
+
+    ($global_expires_in > 0) || ($global_expires_in == $sEXPIRES_NEVER) || ($global_expires_in == $sEXPIRES_NOW) or
+	croak("\$global_expires_in must be > 0, \$sEXPIRES_NOW, or $sEXPIRES_NEVER");
+
+    $self->{_global_expires_in} = $global_expires_in;
+}
+
+
+# Get the username associated with this cache
+
+sub get_username 
+{
+    my ($self) = @_;
+    
+    return $self->{_username};
+}
+
+
+# Set the username associated with this cache
+# TODO:  This should probably trigger a rebuild of the namespace_path
+
+sub set_username 
+{
+    my ($self, $username) = @_;
+
+    $self->{_username} = $username;
+}
+
+
+
+
+# Gets the filemode for files created within the cache
+
+sub get_filemode
+{
+    my ($self) = @_;
+
+    return $self->{_filemode};
+}
+
+
+# Sets the filemode for files created within the cache
+
+sub set_filemode 
+{
+    my ($self, $filemode) = @_;
+
+    $self->{_filemode} = $filemode;
+}
+
+
+
+
+# Gets the max cache size.
+
+sub get_max_size
+{
+    my ($self) = @_;
+
+    return $self->{_max_size};
+}
+
+
+
+# Sets the max cache size.
+# TODO:  This could cause the reduction routines to run
+
+sub set_max_size
+{
+    my ($self, $max_size) = @_;
+    
+    ($max_size > 0) || ($max_size == $sNO_MAX_SIZE) or
+	croak("Invalid cache size.  Must be either \$sNO_MAX_SIZE or greater than zero");
+
+    $self->{_max_size} = $max_size;
+}
+
+
+
 
 
 1;
@@ -540,38 +1079,75 @@ File::Cache - Share data between processes via filesystem
 =head1 DESCRIPTION
 
 B<File::Cache> is a perl module that implements an object 
-storage space where data is persisted across process  boundaries 
+storage space where data is persisted across process boundaries 
 via the filesystem.  
 
 =head1 SYNOPSIS
 
-use File::Cache;
+ use File::Cache;
 
-# create a cache in the specified namespace, where objects 
-# will expire in one day
+ # create a cache in the default namespace, where objects
+ # do not expire
 
-my $cache = new File::Cache( { namespace  => 'MyCache', 
-                               expires_in => 86400 } );
+ my $cache = new File::Cache();
 
-# store a value in the cache (will expire in one day)
+ # create a user-private cache in the specified 
+ # namespace, where objects will expire in one day, and
+ # will automatically be removed from the cache.
 
-$cache->set("key1", "value1");
+ my $cache = new File::Cache( { namespace  => 'MyCache', 
+                                expires_in => 86400,
+                                filemode => 0600 } );
 
-# retrieve a value from the cache
+ # create a public cache in the specified namespace,
+ # where objects will expire in one day, but will not be
+ # removed from the cache automatically.
 
-$cache->get("key1");
+ my $cache = new File::Cache( { namespace  => 'MyCache', 
+                                expires_in => 86400,
+                                username => 'shared_user',
+                                auto_remove_stale => 0,
+                                filemode => 0666 } );
 
-# store a value that expires in one hour
+ # create a cache readable by the user and the user's
+ # group in the specified namespace, where objects will
+ # expire in one day, but may be removed from the cache
+ # earlier if the size becomes more than a megabyte.
 
-$cache->set("key2", "value2", 3600);
+ my $cache = new File::Cache( { namespace  => 'MyCache', 
+                                expires_in => 86400,
+                                max_size => 1048576,
+                                username => 'shared_user',
+                                filemode => 0660 } );
 
-# clear this cache's contents
+ # store a value in the cache (will expire in one day)
 
-$cache->clear();
+ $cache->set("key1", "value1");
 
-# delete all namespaces from the filesystem
+ # retrieve a value from the cache
 
-File::Cache::CLEAR();
+ $cache->get("key1");
+
+ # retrieve a stale value from the cache.
+ # (Undefined behavior if auto_remove_stale is 1)
+
+ $cache->get_stale("key1");
+
+ # store a value that expires in one hour
+
+ $cache->set("key2", "value2", 3600);
+
+ # reduce the cache size to 3600 bytes
+
+ $cache->reduce_size(3600);
+
+ # clear this cache's contents
+
+ $cache->clear();
+
+ # delete all namespaces from the filesystem
+
+ File::Cache::CLEAR();
 
 =head2 TYPICAL USAGE
 
@@ -601,6 +1177,22 @@ That bit of code, executed in any instance of the mod_perl/httpd process will
 first try the filesystem cache, and only perform the expensive database call
 if the image has not been fetched before, has timed out, or the cache has been cleared.
 
+The current implementation of this module automatically removes expired items from the
+cache when the get() method is called and the auto_remove_stale setting is true.
+Automatic removal does not occur when the set() method is called, which means that
+the cache can become polluted with expired items if many items are stored in
+the cache for short periods of time, and are rarely accessed. This is a design
+decision that favors efficiency in the common case, where items are accessed
+frequently. If you want to limit cache growth, see the max_size option, which
+will automatically shrink the cache when the set() method is called. (max_size
+is unaffected by the value of auto_remove_stale.)
+
+Be careful that you call the purge method periodically if auto_remove_stale is 0 and
+max_size has its default value of unlimited size. In this configuration, the
+cache size will be a function of the number of items inserted into the cache
+since the last purge. (i.e. It can grow extremely large if you put lots of
+different items in the cache.)
+
 =head2 METHODS
 
 =over 4
@@ -629,6 +1221,35 @@ will never expire unless explicitly set.
 The "cache_key" is used to determine the underlying filesystem namespace to use.  In typical
 usage, leaving this unset and relying on namespaces alone will be more than adequate.
 
+=item $options{username}
+
+The "username" is used to explicitely set the username. This is useful for
+cases where one wishes to share a cache among multiple users. If left unset,
+the value will be the current user's username. (Also see $options{filemode}.)
+Note that the username is not used to set ownership of the cache files -- the
+i.e. the username does not have to be a user of the system.
+
+=item $options{filemode}
+
+"filemode" specifies the permissions for cache files. This is useful for
+cases where one wishes to share a cache among multiple users. If left unset,
+the value will be "u", indicating that only the current user can read an write
+the cache files. See the filemode() method documentation for the specification
+syntax.
+
+=item $options{max_size}
+
+"max_size" specifies the maximum size of the cache, in bytes.  Cache entries
+are removed during the set() operation in order to reduce the cache size
+before the new cache value is added. See the reduce_size() documentation for
+the cache entry removal policy. The max_size will be maintained regardless of
+the value of auto_remove_stale.
+
+=item $options(auto_remove_stale}
+
+"auto_remove_stale" species that the cache should remove expired objects from
+the cache when they are requested.
+
 =back
 
 =item B<set($identifier, $object, $expires_in)>
@@ -648,13 +1269,29 @@ The object to be stored.
 =item $expires_in I<(optional)>
 
 The object will be cleared from the cache in this number of seconds.  Overrides 
-the default expire_in for the cache.
+the default expires_in value for the cache.
 
 =back
 
 =item B<get($identifier)>
 
-Retrieves an object from the cache.  get takes the following parameter:
+Retrieves an object from the cache, if it is not stale.  If it is stale and
+auto_remove_stale is 1, it will be removed from the cache. get takes the following
+parameter:
+
+=over 4
+
+=item $identifier
+
+The key referring to the object to be retrieved.
+
+=back
+
+=item B<get_stale($identifier)>
+
+Retrieves a stale object from the cache. Call this method only if auto_remove_stale
+is 0. (It happens to have a precise semantics for auto_remove_stale == 1, but it may
+change.) get_stale takes the following parameter:
 
 =over 4
 
@@ -671,6 +1308,111 @@ Removes all objects from this cache.
 =item B<purge()>
 
 Removes all objects that have expired
+
+=item B<size()>
+
+Return an estimate of the disk usage of the current namespace.
+
+
+=item B<reduce_size($size)>
+
+Reduces the size of the cache so that it is below $size. Note that the cache
+size is approximate, and may slightly exceed the value of $size.
+
+Cache entries are removed in order of nearest expiration time, or latest
+access time if there are no cache entries with expiration times. (If there are
+a mix of cache entries with expiration times and without, the ones with
+expiration times are removed first.) reduce_size takes the following
+parameter:
+
+=over 4
+
+=item $size
+
+The new target cache size.
+
+=back
+
+
+=item B<get_global_expires_in()>
+
+Returns the default number of seconds before an object in the cache expires.
+
+=item B<set_global_expires_in($global_expires_in)>
+
+Sets the default number of seconds before an object in the cache expires.  
+set_global_expires_in takes the following parameter:
+
+=over 4
+
+=item $global_expires_in
+
+The default number of seconds before an object in the cache expires.  It should
+be a number greater than zero, $File::Cache::sEXPIRES_NEVER, or $File::Cache::sEXPIRES_NOW.
+
+=back 
+
+=item B<get_auto_remove_stale()>
+
+Returns whether or not the cache will automatically remove objects after they expire.
+
+=item B<set_auto_remove_stale($auto_remove_stale)>
+
+Sets whether or not the cache will automatically remove objects after they expire.  
+set_auto_remove_stale takes the following parameter:
+
+=over 4
+
+=item $auto_remove_stale
+
+The new auto_remove_stale value.  If $auto_remove_stale is 1 or $File::Cache::sTRUE,
+then the cache will automatically remove items when they are being retrieved if they
+have expired.  If $auto_remove_stale is 0 or $File::Cache::sFALSE, the cache will
+only remove expired items when the purge() method is called, or if max_size is set.  Note
+that the behavior of get_stale is undefined if $auto_remove_stale is true.
+
+=back
+
+
+=item B<get_username()>
+
+Returns the username that is currently being used to define the location
+of this cache.
+
+=item B<set_username($username)>
+
+Sets the username that is currently being used to define the location
+of this cache.  set_username takes the following parameter:
+
+=over 4
+
+=item $username
+
+The username that is currently being used to define the location
+of this cache. It is not directly used to determine the ownership of the
+cache files, but can be used to isolate sections of a cache for different
+permissions.
+
+=back
+
+=item B<get_filemode()>
+
+Returns the filemode specification for newly created cache objects. 
+
+=item B<set_filemode($mode)>
+
+Sets the filemode specification for newly created cache objects. 
+set_filemode takes the following parameter:
+
+=over 4
+
+=item $mode
+
+The file mode -- a numerical mode identical to that used by chmod(). See the
+chmod() documentation for more information.
+
+=back
+
 
 =item B<File::Cache::CLEAR($cache_key)>
 
@@ -714,6 +1456,30 @@ a non-standard cache key.
 
 =back
 
+=item B<File::Cache::REDUCE_SIZE($size, $cache_key)>
+
+Reduces the size of the cache so that it is below $size. Note that the cache
+size is approximate, and may slightly exceed the value of $size.
+
+Cache entries are removed in order of nearest expiration time, or latest
+access time if there are no cache entries with expiration times. (If there are
+a mix of cache entries with expiration times and without, the ones with
+expiration times are removed first.) REDUCE_SIZE takes the following
+parameters:
+
+=over 4
+
+=item $size
+
+The new target cache size.
+
+=item $cache_key I<(optional)>
+
+Specifies the filesystem data to be examined.  Needed only if a cache was created with
+a non-standard cache key.
+
+=back
+
 =back
 
 =head1 BUGS
@@ -724,10 +1490,6 @@ a non-standard cache key.
 
 The root of the cache namespace is created with global read/write permissions.
 
-=item *
-
-There is no mechanism for limiting the amount of memory in use
-
 =back
 
 =head1 SEE ALSO
@@ -736,7 +1498,7 @@ IPC::Cache, Storable
 
 =head1 AUTHOR
 
-DeWitt Clinton <dclinton@eziba.com>
+DeWitt Clinton <dclinton@eziba.com>, and please see the CREDITS file
 
 =cut
 

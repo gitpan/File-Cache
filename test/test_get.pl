@@ -3,7 +3,7 @@
 use strict;
 use File::Cache;
 
-my $sUSAGE = "Usage: test_get.pl cache_key namespace key expected_value";
+my $sUSAGE = "Usage: test_get.pl cache_key namespace username key expected_value";
 
 my $cache_key = $ARGV[0] or
     die("$sUSAGE\n");
@@ -11,13 +11,16 @@ my $cache_key = $ARGV[0] or
 my $namespace = $ARGV[1] or
     die("$sUSAGE\n");
 
-my $key = $ARGV[2] or
+my $username = $ARGV[2] or
     die("sUSAGE\n");
 
-my $expected_value = $ARGV[3] or
+my $key = $ARGV[3] or
     die("sUSAGE\n");
 
-my $cache = new File::Cache( { cache_key => $cache_key, namespace => $namespace } ) or
+my $expected_value = $ARGV[4] or
+    die("sUSAGE\n");
+
+my $cache = new File::Cache( { cache_key => $cache_key, namespace => $namespace, username => $username } ) or
     die("Couldn't create cache");
 
 my $value = $cache->get($key) or
