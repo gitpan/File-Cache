@@ -8,7 +8,7 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN { $| = 1; print "1..20\n"; }
+BEGIN { $| = 1; print "1..21\n"; }
 END {print "not ok 1\n" unless $loaded;}
 
 use File::Cache qw($sSUCCESS $sFAILURE);
@@ -324,9 +324,39 @@ if ($status == $sSUCCESS) {
 }
 
 
-# Test CLEARING of a cache object
+# Test the removal of a cached file
 
 $test = 20;
+
+$status = $sSUCCESS;
+
+my $remove_key = "foo";
+
+my $remove_value = "bar";
+
+$cache1->set($remove_key, $remove_value);
+
+$cache1->get($remove_key) eq $remove_value or
+    $status = $sFAILURE;
+
+$cache1->remove($remove_key) or
+    $status = $sFAILURE;
+
+if (defined $cache1->get($remove_key)) {
+    $status = $sFAILURE;
+}
+
+if ($status == $sSUCCESS) {
+    print "ok $test\n";
+} else {
+   print "not ok $test\n";
+}
+
+
+
+# Test CLEARING of a cache object
+
+$test = 21;
 
 $status = File::Cache::CLEAR($sTEST_CACHE_KEY);
 
@@ -335,6 +365,7 @@ if ($status == $sSUCCESS) {
 } else {
    print "not ok $test\n";
 }
+
 
 1;
 

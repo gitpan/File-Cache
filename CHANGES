@@ -1,5 +1,21 @@
 Revision history for File::Cache
 
+0.11 2000-06-22-09-23
+  - updated the CREDITS file
+  - updated Cache.pm for version 0.10
+
+0.10 2000-06-22-09-07
+  - updated Cache.pm for version 0.10
+  - added the remove($identifier) method to allow keys to be selectively
+    removed
+  - added a test for remove
+  - changed email address in the docs to <dewitt@avacet.com>
+  - reformatted for 80 column displays
+  - updated the _write_file routine to make it pass taint checking
+    (jhoward@fastmail.fm)
+  - updated the purge() routine to make it pass taint checking
+    (jhoward@fastmail.fm)
+
 0.09 2000-04-28-12-43
   - perldoc updates for get and get_stale (Bug ID 104432)
   - added public constants to EXPORT_OK (Bug ID 104433)
@@ -15,31 +31,33 @@ Revision history for File::Cache
 
 
 0.07 2000-04-10-09-45
-  - added support for the "cache_depth" option that enables subdirectories in the cache
-    to increase performance when caching large numbers of objects
-  - rewrote the _recursive_find_nearest_expiration and _recursive_find_latest_accessed
-    routines to actually work recursively (needed to support cache_depth)   
-  - added a routine that avoids a race when removing files from the cache (thanks
-    to Jessica Mintz)
+  - added support for the "cache_depth" option that enables
+    subdirectories in the cache to increase performance when caching
+    large numbers of objects
+  - rewrote the _recursive_find_nearest_expiration and
+    _recursive_find_latest_accessed routines to actually work recursively
+    (needed to support cache_depth)
+  - added a routine that avoids a race when removing files from the
+    cache (thanks to Jessica Mintz)
 
  
 0.06 2000-03-06-11-12
-  - bug fixed where purge() didn't actually delete the cache file (David Coppit
-    <david@coppit.org>)
-  - auto_purge, username, max_size, and filemode options added (David Coppit
-    <david@coppit.org>)
-  - cache_path was renamed user_path
-  - set/get methods added for auto_purge, username, max_size, expires_in 
-    and filemode, namespace_path, cache_key, cache_path, and user_path 
+  - bug fixed where purge() didn't actually delete the cache file
     (David Coppit <david@coppit.org>)
-  - automatic cache size reduction added to set() method, and reduce_size()
-    method created (David Coppit <david@coppit.org>)
+  - auto_purge, username, max_size, and filemode options added (David
+    Coppit <david@coppit.org>)
+  - cache_path was renamed user_path
+  - set/get methods added for auto_purge, username, max_size,
+    expires_in and filemode, namespace_path, cache_key, cache_path,
+    and user_path (David Coppit <david@coppit.org>)
+  - automatic cache size reduction added to set() method, and
+    reduce_size() method created (David Coppit <david@coppit.org>)
   - fixed the CHANGES file to reflect the version 0.05 changes
   - updated the perldoc (David Coppit <david@coppit.org>)
-  - now using File::Spec for the path generation (thanks for David for the 
-    idea)
-  - updated the test.pl and test/test_get.pl scripts to include tests for
-    setting the username, filemode, and max_size
+  - now using File::Spec for the path generation (thanks for David for
+    the idea)
+  - updated the test.pl and test/test_get.pl scripts to include tests
+    for setting the username, filemode, and max_size
 
 
 0.05 2000-02-22-16-23
